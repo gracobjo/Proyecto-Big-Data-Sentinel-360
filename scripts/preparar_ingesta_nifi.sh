@@ -1,6 +1,6 @@
 #!/bin/bash
 # Prepara el entorno para la ingesta en NiFi: directorio GPS, datos de prueba y temas Kafka.
-# Ejecutar desde la raíz del proyecto: ./scripts/preparar_ingesta_nifi.sh
+# Ejecutar desde la raíz de Sentinel360: ./scripts/preparar_ingesta_nifi.sh
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +41,7 @@ echo "=== Siguiente: en la UI de NiFi ==="
 echo "  1. Importar flujo: menú (icono +) → Import flow → elegir: ingest/gps_transport_flow_importable.json"
 echo "  2. Habilitar Controller Service: en el grupo importado → Config (engranaje) → Controller Services → Kafka3ConnectionService → Enable"
 echo "  3. Arrancar el proceso: en el grupo → Start"
-echo "  4. (Opcional) GetFile usa $GPS_DIR; para usar data/sample del proyecto, edita GetFile → Input Directory"
+echo "  4. (Opcional) GetFile usa $GPS_DIR; para usar data/sample de Sentinel360, edita GetFile → Input Directory"
 echo ""
 echo "  UI NiFi: https://localhost:8443/nifi"
 echo "  Ver mensajes en Kafka: $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server $BOOTSTRAP --topic filtered-data --from-beginning --max-messages 5"

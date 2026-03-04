@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 USER="${HDFS_USER:-hadoop}"
 RAW="${PROJECT_ROOT}/data/sample"
-# Ruta HDFS del proyecto (NameNode configurado en core-site.xml)
+# Rutas HDFS de Sentinel360 (NameNode configurado en core-site.xml)
 HDFS_RAW="/user/${USER}/proyecto/raw"
 
 if [ ! -d "$RAW" ]; then

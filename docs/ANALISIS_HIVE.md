@@ -1,6 +1,6 @@
-# Análisis del uso de Hive en el proyecto (según PDF)
+# Análisis del uso de Hive en Sentinel360 (según PDF)
 
-Documento que relaciona los requisitos del enunciado con la implementación actual de **Apache Hive** en el proyecto.
+Documento que relaciona los requisitos del enunciado con la implementación actual de **Apache Hive** en Sentinel360.
 
 ---
 
@@ -8,7 +8,7 @@ Documento que relaciona los requisitos del enunciado con la implementación actu
 
 ### Requisitos técnicos (Stack Apache 2026)
 
-- **Almacenamiento**: *"HDFS 3.4.2 & ... (NoSQL) / **Apache Hive (SQL)**"* — en este proyecto la capa NoSQL es **MongoDB**.
+- **Almacenamiento**: *"HDFS 3.4.2 & ... (NoSQL) / **Apache Hive (SQL)**"* — en Sentinel360 la capa NoSQL es **MongoDB**.
 - Hive es la capa **SQL** (reporting histórico); MongoDB es la capa **NoSQL** para consultas de baja latencia (estado por vehículo).
 
 ### Fase II – Preprocesamiento y transformación
@@ -26,18 +26,18 @@ Documento que relaciona los requisitos del enunciado con la implementación actu
 ### Rúbrica de evaluación
 
 - **Persistencia (Excelente)**: *"Uso correcto de NoSQL y **Hive (SQL)** según el caso de uso."*
-- En este proyecto: Hive para SQL/reporting histórico; **MongoDB** para estado reciente por vehículo.
+- En Sentinel360: Hive para SQL/reporting histórico; **MongoDB** para estado reciente por vehículo.
 
 ### Ejemplo de referencia (NYC Taxi)
 
 - *"**Airflow** genera un **reporte diario** de ingresos y **lo guarda en Hive**."*
-- Equivalente en nuestro proyecto: un proceso (p. ej. DAG de Airflow o job programado) que genere un reporte periódico y persista resultados en tablas Hive.
+- Equivalente en Sentinel360: un proceso (p. ej. DAG de Airflow o job programado) que genere un reporte periódico y persista resultados en tablas Hive.
 
 ---
 
-## 2. Mapeo PDF → implementación en el proyecto
+## 2. Mapeo PDF → implementación en Sentinel360
 
-| Requisito PDF | Implementación en el proyecto |
+| Requisito PDF | Implementación en Sentinel360 |
 |---------------|-------------------------------|
 | **Hive (SQL)** como capa de almacenamiento | Base de datos Hive `transport` y tablas en `hive/schema/`. |
 | **Datos maestros en Hive** para enriquecimiento | Tablas `warehouses` y `routes` (HDFS: `/user/hadoop/proyecto/warehouses`, `.../routes`). Lectura en `spark/cleaning/enrich_with_hive.py` con `spark.table("transport.warehouses")`. |
@@ -116,7 +116,7 @@ transport (database)
 
 ## 7. Resumen
 
-| Uso de Hive en el PDF | Cubierto en el proyecto |
+| Uso de Hive en el PDF | Cubierto en Sentinel360 |
 |------------------------|-------------------------|
 | Capa SQL del almacenamiento | Sí: DB `transport`, tablas en HDFS/Parquet |
 | Datos maestros para enriquecimiento | Sí: `warehouses`, `routes`; usados en `enrich_with_hive.py` |

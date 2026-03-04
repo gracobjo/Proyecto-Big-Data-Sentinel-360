@@ -1,4 +1,4 @@
-# Configurar el procesador InvokeHTTP (OpenWeather)
+# Sentinel360 – Configurar el procesador InvokeHTTP (OpenWeather)
 
 Con el procesador **InvokeHTTP** seleccionado, abre su configuración (doble clic o clic derecho → Configure) y ajusta estas propiedades.
 

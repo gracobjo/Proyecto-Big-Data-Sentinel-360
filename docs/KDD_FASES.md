@@ -1,6 +1,6 @@
-# Fases del ciclo KDD en el proyecto
+# Fases del ciclo KDD en Sentinel360
 
-Resumen de cómo se implementa cada fase según el enunciado (ciclo KDD + stack Apache).
+Resumen de cómo se implementa cada fase en Sentinel360 según el enunciado (ciclo KDD + stack Apache).
 
 ---
 
@@ -44,7 +44,7 @@ Resumen de cómo se implementa cada fase según el enunciado (ciclo KDD + stack 
 - **Objetivo**: Automatizar re-entrenamiento de grafos y limpieza de tablas temporales.
 - **Herramientas**: Airflow.
 - **Qué hace**: DAG que lanza jobs Spark (limpieza, grafos) y tareas de mantenimiento.
-- **Documentación**: `airflow/` (si existe en el proyecto).
+- **Documentación**: `airflow/` (si existe en Sentinel360).
 
 ---
 

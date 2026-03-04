@@ -1,14 +1,14 @@
-# Arranque de servicios (Kafka, MongoDB, Spark, Hadoop, Hive, NiFi)
+# Arranque de servicios Sentinel360 (Kafka, MongoDB, Spark, Hadoop, Hive, NiFi)
 
 ## Resolver problemas frecuentes
 
 - **KAFKA_HOME no encontrado**: El script busca en `~/software/kafka_2.13-4.1.1`, `~/software/confluent-7.5.0` y otras rutas. Si Kafka está en `~/software/kafka_2.13-4.1.1`, ya está en `config/rutas_servicios.env` (export activo). Para el clúster, el broker debe escuchar en **192.168.99.10:9092**: en `$KAFKA_HOME/config/server.properties` pon `listeners=PLAINTEXT://192.168.99.10:9092` y `advertised.listeners=PLAINTEXT://192.168.99.10:9092`.
 - **Spark History Server: FileNotFoundException file:/tmp/spark-events**: El script crea ya ese directorio. Si falla, créalo a mano: `mkdir -p /tmp/spark-events && chmod 1777 /tmp/spark-events`. En `config/spark-defaults.conf` está configurado `spark.history.fs.logDirectory`.
-- **MongoDB "Data directory /data/db not found"**: Al ejecutar `mongod` a mano usa por defecto `/data/db`. Opciones: (1) Usar el servicio: `sudo systemctl start mongod`. (2) El script arranca mongod con `--dbpath` en `data/mongodb_db` del proyecto; o en tu casa: `mkdir -p ~/data/db && mongod --dbpath ~/data/db`.
+- **MongoDB "Data directory /data/db not found"**: Al ejecutar `mongod` a mano usa por defecto `/data/db`. Opciones: (1) Usar el servicio: `sudo systemctl start mongod`. (2) El script arranca mongod con `--dbpath` en `data/mongodb_db` de Sentinel360; o en tu casa: `mkdir -p ~/data/db && mongod --dbpath ~/data/db`.
 
 ## Script único (recomendado)
 
-Desde la **raíz del proyecto**:
+Desde la **raíz del proyecto Sentinel360**:
 
 ```bash
 chmod +x scripts/start_servicios.sh scripts/stop_servicios.sh
@@ -71,7 +71,7 @@ Si Kafka usa **KRaft** (sin Zookeeper), la primera vez hay que formatear el alma
    ./scripts/start_servicios.sh
    ```
 
-4. Crear el tema del proyecto (broker en 192.168.99.10:9092):
+4. Crear los temas de Sentinel360 (broker en 192.168.99.10:9092):
    ```bash
    $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server 192.168.99.10:9092 --create --topic raw-data --partitions 3 --replication-factor 1
    ```

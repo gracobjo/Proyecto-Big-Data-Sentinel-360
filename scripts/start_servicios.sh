@@ -1,5 +1,5 @@
 #!/bin/bash
-# Arranca los servicios necesarios para el proyecto (Kafka, MongoDB, opcional: Spark History, Hive, NiFi).
+# Arranca los servicios necesarios para Sentinel360 (Kafka, MongoDB, opcional: Spark History, Hive, NiFi).
 # Ejecutar en el nodo master (hadoop, 192.168.99.10) o donde tengas instalados los servicios.
 # Rutas por defecto: /usr/local/hadoop, /usr/local/kafka, /usr/local/spark. Ajusta con variables de entorno.
 
@@ -50,7 +50,7 @@ log_fail() { echo -e "${RED}[FALLO]${NC} $1"; }
 [ -f "$PROJECT_ROOT/config/rutas_servicios.env" ] && . "$PROJECT_ROOT/config/rutas_servicios.env" 2>/dev/null || true
 
 mkdir -p "$PROJECT_ROOT/logs"
-echo "=== Arrancando servicios (proyecto: $PROJECT_ROOT) ==="
+echo "=== Arrancando servicios Sentinel360 ($PROJECT_ROOT) ==="
 echo ""
 
 # --- 1. Hadoop (HDFS + YARN) ---
@@ -109,7 +109,7 @@ else
 fi
 echo ""
 
-# --- 3. MongoDB (servicio systemd o mongod con --dbpath en el proyecto) ---
+# --- 3. MongoDB (servicio systemd o mongod con --dbpath en Sentinel360) ---
 if pgrep -x mongod >/dev/null 2>&1; then
   log_ok "MongoDB ya está en marcha"
 elif command -v mongod >/dev/null 2>&1; then

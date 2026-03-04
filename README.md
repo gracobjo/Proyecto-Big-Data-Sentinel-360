@@ -1,10 +1,10 @@
-# Proyecto Big Data - Monitorización de Red de Transporte Global
+# Sentinel360
 
-Proyecto integral siguiendo el ciclo **KDD** (Knowledge Discovery in Databases) con stack Apache.
+Monitorización de red de transporte global siguiendo el ciclo **KDD** (Knowledge Discovery in Databases) con stack Apache.
 
 ## Stack utilizado
 
-| Componente     | Tecnología                    | Uso en el proyecto                          |
+| Componente     | Tecnología                    | Uso en Sentinel360                           |
 |---------------|-------------------------------|---------------------------------------------|
 | Ingesta       | NiFi 2.6, Kafka 3.9 (KRaft)   | APIs + logs GPS → temas Kafka → HDFS raw   |
 | Procesamiento | Spark 3.5 (SQL, Streaming, GraphFrames) | Limpieza, enriquecimiento, grafos, ventanas |
@@ -12,10 +12,10 @@ Proyecto integral siguiendo el ciclo **KDD** (Knowledge Discovery in Databases) 
 | Orquestación  | Airflow 2.10                  | DAG re-entrenamiento grafos y limpieza     |
 | Recursos      | YARN                          | Ejecución de jobs Spark                     |
 
-## Estructura del proyecto
+## Estructura del proyecto Sentinel360
 
 ```
-ProyectoBigData/
+Sentinel360/   (o ProyectoBigData/ según nombre de la carpeta local)
 ├── config/              # Configuraciones (Kafka, NiFi, Spark, Hive)
 ├── ingest/              # Fase I: Ingesta (NiFi, Kafka, HDFS)
 ├── spark/               # Fase II–III: Jobs Spark (SQL, GraphFrames, Streaming)
@@ -40,9 +40,9 @@ ProyectoBigData/
 - **Kafka**: `192.168.99.10:9092`
 - **YARN Web UI**: http://192.168.99.10:8088
 
-Toda la configuración (IPs, rutas, temas) está centralizada en **`config.py`**. Los scripts Python importan estas variables.
+Toda la configuración de Sentinel360 (IPs, rutas, temas) está centralizada en **`config.py`**. Los scripts Python importan estas variables.
 
-## Rutas HDFS del proyecto
+## Rutas HDFS (Sentinel360)
 
 - **Raw**: `/user/hadoop/proyecto/raw/`
 - **Procesado**: `/user/hadoop/proyecto/procesado/` (cleaned, enriched, graph, aggregated_delays, temp)
@@ -72,10 +72,14 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/KDD_FASES.md](docs/KDD_FASES.md) | Fases del ciclo KDD (ingesta, limpieza, enriquecimiento, streaming, orquestación) |
 | [docs/ARRANQUE_SERVICIOS.md](docs/ARRANQUE_SERVICIOS.md) | Cómo arrancar y parar Kafka, MongoDB, Hive, NiFi, Spark History |
 | [docs/SIGUIENTE_PASOS.md](docs/SIGUIENTE_PASOS.md) | PutHDFS en NiFi, orden de jobs Spark, Hive DDL |
-| [docs/ANALISIS_HIVE.md](docs/ANALISIS_HIVE.md) | Uso de Hive en el proyecto (maestros, agregados, reporting) |
+| [docs/ANALISIS_HIVE.md](docs/ANALISIS_HIVE.md) | Uso de Hive en Sentinel360 (maestros, agregados, reporting) |
 | [hive/README.md](hive/README.md) | Esquema Hive, scripts 01–05, orden de ejecución |
 | [ingest/nifi/FASE_I_INGESTA.md](ingest/nifi/FASE_I_INGESTA.md) | Flujos NiFi (GPS, HTTP), PutHDFS, temas Kafka |
 | [ingest/nifi/FLUJO_HTTP_OPENWEATHER.md](ingest/nifi/FLUJO_HTTP_OPENWEATHER.md) | Configuración InvokeHTTP para OpenWeather |
 | [mongodb/README.md](mongodb/README.md) | Colección `transport.vehicle_state`, scripts de inicialización |
+| [docs/HOWTO_EJECUCION.md](docs/HOWTO_EJECUCION.md) | **Guía de ejecución**: paso a paso por supuestos (ingesta, Hive, Spark, grafos, streaming) |
+| [docs/FUNCIONALIDADES_RECIENTES.md](docs/FUNCIONALIDADES_RECIENTES.md) | Grafos, visualización, verificación Hive y correcciones aplicadas |
+| [docs/VISUALIZAR_GRAFOS.md](docs/VISUALIZAR_GRAFOS.md) | Cómo ver los Parquet y generar grafo.png (red de almacenes y rutas) |
+| [docs/POBLAR_TABLAS_HIVE.md](docs/POBLAR_TABLAS_HIVE.md) | Cómo se pueblan las tablas de `transport` y script de verificación |
 
-**Configuración central**: IPs, rutas HDFS, Kafka y Hive están en **`config.py`**; los jobs Spark e ingest lo importan.
+**Configuración central de Sentinel360**: IPs, rutas HDFS, Kafka y Hive están en **`config.py`**; los jobs Spark e ingest lo importan.

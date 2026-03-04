@@ -1,4 +1,4 @@
-# Configuración centralizada del clúster (3 nodos: hadoop + nodo1 + nodo2)
+# Sentinel360 – Configuración centralizada del clúster (3 nodos: hadoop + nodo1 + nodo2)
 # Migración de red: sin localhost/127.0.0.1; uso de IPs estáticas.
 
 # Nodos

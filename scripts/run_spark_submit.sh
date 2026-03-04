@@ -2,7 +2,7 @@
 # Lanzar jobs Spark en modo distribuido (YARN, 2 ejecutores en nodo1/nodo2)
 # Uso: ./scripts/run_spark_submit.sh <script.py> [arg1 [arg2 ...]]
 # Ejemplo: ./scripts/run_spark_submit.sh spark/cleaning/clean_and_normalize.py
-# Requiere: SPARK_HOME y desde el directorio raíz del proyecto (para --py-files config.py)
+# Requiere: SPARK_HOME y ejecutar desde la raíz de Sentinel360 (para --py-files config.py)
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

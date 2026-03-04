@@ -1,4 +1,4 @@
-# Flujo NiFi: HTTP / OpenWeather (API pública) – Fase I
+# Sentinel360 – Flujo NiFi: HTTP / OpenWeather (API pública) – Fase I
 
 Consumir datos de una API pública (OpenWeather) y publicar en Kafka (tema **raw-data**) y opcionalmente en HDFS (copia raw).
 

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Comprueba que el clúster esté listo para ejecutar el proyecto.
-# Puede ejecutarse desde la raíz del proyecto o desde scripts/.
+# Comprueba que el clúster esté listo para ejecutar Sentinel360.
+# Ejecutar desde la raíz del proyecto (Sentinel360) o desde scripts/.
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +17,7 @@ ok()  { echo -e "${VERDE}[OK]${NC} $1"; }
 fail() { echo -e "${RED}[FALLO]${NC} $1"; return 1; }
 warn() { echo -e "${AMARILLO}[?]${NC} $1"; }
 
-echo "Proyecto: $PROJECT_ROOT"
+echo "Sentinel360: $PROJECT_ROOT"
 echo ""
 
 echo "=== 1. Conectividad (ping a nodos) ==="
@@ -26,7 +26,7 @@ ping -c 1 -W 2 192.168.99.12 >/dev/null 2>&1 && ok "nodo1 192.168.99.12" || warn
 ping -c 1 -W 2 192.168.99.14 >/dev/null 2>&1 && ok "nodo2 192.168.99.14" || warn "nodo2 no alcanzable"
 
 echo ""
-echo "=== 2. HDFS (NameNode y rutas del proyecto) ==="
+echo "=== 2. HDFS (NameNode y rutas Sentinel360) ==="
 if command -v hdfs >/dev/null 2>&1; then
   hdfs dfs -ls / >/dev/null 2>&1 && ok "HDFS accesible" || fail "HDFS no responde (revisar fs.defaultFS en core-site.xml)"
   hdfs dfs -ls /user/hadoop/proyecto >/dev/null 2>&1 && ok "Ruta /user/hadoop/proyecto existe" || warn "Ejecuta: ./scripts/setup_hdfs.sh"
@@ -54,7 +54,7 @@ echo ""
 echo "=== 5. Spark (spark-submit y config) ==="
 if command -v spark-submit >/dev/null 2>&1; then
   ok "spark-submit encontrado"
-  [ -f "config.py" ] && ok "config.py en raíz del proyecto" || fail "Ejecuta este script desde la raíz del proyecto (donde está config.py)"
+  [ -f "config.py" ] && ok "config.py en raíz de Sentinel360" || fail "Ejecuta este script desde la raíz del proyecto Sentinel360 (donde está config.py)"
 else
   warn "spark-submit no encontrado (¿SPARK_HOME/bin en PATH?)"
 fi

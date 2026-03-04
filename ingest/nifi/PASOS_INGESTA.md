@@ -4,10 +4,10 @@
 Flujo GPS: `ingest/gps_transport_flow_importable.json`. Flujo HTTP: `ingest/http_weather_flow_importable.json`.  
 Ver **FASE_I_INGESTA.md** y **FLUJO_HTTP_OPENWEATHER.md** para el flujo HTTP y PutHDFS.
 
-Sigue estos pasos en orden. Antes, ejecuta el script de preparación desde la raíz del proyecto:
+Sigue estos pasos en orden. Antes, ejecuta el script de preparación desde la raíz de Sentinel360:
 
 ```bash
-cd ~/Documentos/ProyectoBigData
+cd ~/Documentos/ProyectoBigData   # ruta local del proyecto Sentinel360
 chmod +x scripts/preparar_ingesta_nifi.sh
 ./scripts/preparar_ingesta_nifi.sh
 ```
@@ -27,7 +27,7 @@ chmod +x scripts/preparar_ingesta_nifi.sh
 2. Busca la opción **“Import flow”** o **“Upload flow”** (según versión: puede estar en el menú de la esquina o en el desplegable del grupo raíz).
 3. En NiFi 2.x: **Components** (panel izquierdo) → **Upload** / **Import** → **Import from file**.
 4. Selecciona el archivo:  
-   **`~/Documentos/ProyectoBigData/ingest/gps_transport_flow_importable.json`**
+   **`<ruta-Sentinel360>/ingest/gps_transport_flow_importable.json`** (p. ej. `~/Documentos/ProyectoBigData/ingest/...`)
 5. Confirma la importación. Debería aparecer un **process group** (p. ej. “gps_transport_flow_importable”) con dos procesadores: **GetFile GPS Logs** y **PublishKafka**.
 
 ---
@@ -48,7 +48,7 @@ chmod +x scripts/preparar_ingesta_nifi.sh
 1. Doble clic en el procesador **GetFile GPS Logs**.
 2. En **Properties**, revisa **Input Directory**:
    - Por defecto: **`/home/hadoop/data/gps_logs`** (el script `preparar_ingesta_nifi.sh` ya ha copiado ahí los datos de prueba).
-   - Si quieres usar la carpeta del proyecto: **`/home/hadoop/Documentos/ProyectoBigData/data/sample`**.
+   - Si quieres usar la carpeta de datos de Sentinel360: **`<ruta-Sentinel360>/data/sample`** (p. ej. `/home/hadoop/Documentos/ProyectoBigData/data/sample`).
 3. **File Filter** debe ser `.*\.(jsonl?|csv)` (ya viene en el flujo).
 4. Acepta (Apply / OK).
 

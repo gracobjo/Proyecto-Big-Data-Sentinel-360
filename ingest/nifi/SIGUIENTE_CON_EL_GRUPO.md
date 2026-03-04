@@ -1,6 +1,6 @@
-# Cómo seguir con el grupo de procesadores en NiFi
+# Sentinel360 – Cómo seguir con el grupo de procesadores en NiFi
 
-Una vez has **importado** el flujo (GPS y/o HTTP), haz esto **dentro del process group** en la UI.
+Una vez has **importado** el flujo (GPS y/o HTTP) de Sentinel360, haz esto **dentro del process group** en la UI.
 
 ---
 

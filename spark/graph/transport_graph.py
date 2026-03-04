@@ -62,8 +62,17 @@ def main(routes_path: str = None, warehouses_path: str = None, output_path: str 
     g = GraphFrame(vertices, edges)
     paths = g.shortestPaths(landmarks=["WH-MAD", "WH-BCN"])
     paths.write.mode("overwrite").parquet(output_path + "/shortest_paths")
-    cc = g.connectedComponents()
-    cc.write.mode("overwrite").parquet(output_path + "/connected_components")
+    print(f"shortest_paths escrito en {output_path}/shortest_paths")
+
+    # connectedComponents puede requerir checkpoint en grafos con ciclos/cadenas largas
+    spark.sparkContext.setCheckpointDir(HDFS_NAMENODE + "/user/hadoop/proyecto/checkpoints/graph")
+    try:
+        cc = g.connectedComponents()
+        cc.write.mode("overwrite").parquet(output_path + "/connected_components")
+        print(f"connected_components escrito en {output_path}/connected_components")
+    except Exception as e:
+        print(f"AVISO: connected_components no pudo escribirse: {e}", file=sys.stderr)
+
     print(f"Grafos escritos en {output_path}")
     spark.stop()
 

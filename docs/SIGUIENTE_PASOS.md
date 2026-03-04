@@ -1,4 +1,4 @@
-# Próximos pasos: PutHDFS (Fase I) + Fases II y III
+# Sentinel360 – Próximos pasos: PutHDFS (Fase I) + Fases II y III
 
 ## Opción A: Completar Fase I – Copia raw en HDFS (PutHDFS)
 
@@ -38,7 +38,7 @@ Para guardar una copia de auditoría en HDFS (`/user/hadoop/proyecto/raw`):
 ### Orden de ejecución
 
 ```bash
-cd ~/Documentos/ProyectoBigData
+cd ~/Documentos/ProyectoBigData   # o la ruta donde tengas Sentinel360
 ```
 
 **1. Rutas HDFS y datos (si no está hecho)**

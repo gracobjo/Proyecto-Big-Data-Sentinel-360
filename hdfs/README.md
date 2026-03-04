@@ -1,4 +1,4 @@
-# HDFS - Rutas del proyecto (clúster)
+# HDFS - Rutas de Sentinel360 (clúster)
 
 NameNode: **hdfs://192.168.99.10:9000**
 

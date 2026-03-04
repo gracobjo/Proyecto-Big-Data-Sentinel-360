@@ -1,4 +1,4 @@
-# Ingesta con NiFi (Fase I): GPS ficticios + HTTP
+# Sentinel360 – Ingesta con NiFi (Fase I): GPS ficticios + HTTP
 
 NiFi debe estar instalado y en marcha. Comprobar:
 
@@ -42,9 +42,9 @@ En NiFi, usa estas variables o configúralas en los procesadores:
 **Generar datos de prueba** (en la máquina donde está la carpeta que vigila NiFi):
 
 ```bash
-cd ~/Documentos/ProyectoBigData
+cd ~/Documentos/ProyectoBigData   # raíz de Sentinel360
 python data/sample/generate_gps_logs.py
-# Copiar a la carpeta que vigila NiFi, o configurar GetFile con Directory = .../ProyectoBigData/data/sample
+# Copiar a la carpeta que vigila NiFi, o configurar GetFile con Directory = <raíz-Sentinel360>/data/sample
 ```
 
 ---

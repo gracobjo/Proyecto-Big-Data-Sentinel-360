@@ -1,5 +1,5 @@
 #!/bin/bash
-# Crear rutas HDFS para el proyecto (clúster: NameNode en 192.168.99.10)
+# Crear rutas HDFS para Sentinel360 (clúster: NameNode en 192.168.99.10)
 # Uso: ./scripts/setup_hdfs.sh [usuario_hdfs]
 # Requiere: HADOOP_HOME en PATH o hdfs disponible (ej. /usr/local/hadoop/bin/hdfs)
 

@@ -1,6 +1,6 @@
-# Hive en el proyecto (ciclo KDD)
+# Hive en Sentinel360 (ciclo KDD)
 
-Según el **PDF del proyecto**, Hive es la capa **SQL** del almacenamiento:
+Según el enunciado del proyecto, Hive es la capa **SQL** del almacenamiento en Sentinel360:
 
 - **Fase II**: datos maestros (almacenes, rutas) en Hive para enriquecimiento con Spark.
 - **Fase III**: datos agregados para reporting histórico (tabla `aggregated_delays`).

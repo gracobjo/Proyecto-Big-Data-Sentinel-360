@@ -8,10 +8,10 @@ El archivo **`gps_transport_flow_importable.json`** es un flujo NiFi 2.x válido
 - **PublishKafka**: publica el contenido en el tema Kafka **`filtered-data`**. Broker: **192.168.99.10:9092** (clúster).
 - **Conexión**: GetFile (success) → PublishKafka.
 
-Ajustes aplicados al JSON del proyecto:
+Ajustes aplicados al JSON de Sentinel360:
 
 - `bootstrap.servers` y parámetro `kafka_brokers`: **192.168.99.10:9092** (en lugar de 127.0.0.1).
-- Filtro de GetFile ampliado para incluir **CSV** (el proyecto genera `gps_events.csv` y `gps_events.json`).
+- Filtro de GetFile ampliado para incluir **CSV** (Sentinel360 genera `gps_events.csv` y `gps_events.json`).
 
 ---
 
@@ -31,13 +31,13 @@ Resultado: GetFile → PublishKafka (raw-data), GetFile → PublishKafka (filter
 
 2. **Directorio de entrada**  
    GetFile usa por defecto **`/home/hadoop/data/gps_logs`**. Opciones:
-   - Copiar o enlazar los datos del proyecto ahí:
+   - Copiar o enlazar los datos de Sentinel360 ahí:
      ```bash
      mkdir -p /home/hadoop/data/gps_logs
      python data/sample/generate_gps_logs.py
-     cp /home/hadoop/Documentos/ProyectoBigData/data/sample/gps_events.* /home/hadoop/data/gps_logs/
+     cp /home/hadoop/Documentos/ProyectoBigData/data/sample/gps_events.* /home/hadoop/data/gps_logs/   # ruta Sentinel360
      ```
-   - O en NiFi, editar GetFile y poner **Input Directory** = ` /home/hadoop/Documentos/ProyectoBigData/data/sample` (o la ruta donde generes los archivos).
+   - O en NiFi, editar GetFile y poner **Input Directory** = ruta a `data/sample` de Sentinel360 (p. ej. `/home/hadoop/Documentos/ProyectoBigData/data/sample`).
 
 3. **Tema Kafka**  
    El flujo publica en **`filtered-data`**. Si quieres “datos crudos” en el mismo flujo, puedes duplicar PublishKafka hacia el tema **`raw-data`** o usar un flujo aparte para raw. Según el PDF: tema crudo = `raw-data`, tema filtrado = `filtered-data`.

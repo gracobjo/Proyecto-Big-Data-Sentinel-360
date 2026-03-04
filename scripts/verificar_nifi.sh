@@ -1,6 +1,6 @@
 #!/bin/bash
 # Comprueba si NiFi está instalado y opcionalmente si está en marcha.
-# Ejecutar desde la raíz del proyecto o: bash scripts/verificar_nifi.sh
+# Ejecutar desde la raíz de Sentinel360: bash scripts/verificar_nifi.sh
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

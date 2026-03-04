@@ -1,4 +1,4 @@
-# Fase I: Ingesta y Selección (NiFi + Kafka) – Checklist práctica
+# Sentinel360 – Fase I: Ingesta y Selección (NiFi + Kafka) – Checklist práctica
 
 Según el enunciado:
 
@@ -50,7 +50,7 @@ Pasos resumidos:
 
 ## 3. HDFS (copia raw)
 
-- Ruta única del proyecto: **`/user/hadoop/proyecto/raw`**.
+- Ruta única de Sentinel360 en HDFS: **`/user/hadoop/proyecto/raw`**.
 - En NiFi: procesador **PutHDFS**; hace falta un **Controller Service HDFS** (o equivalente) con:
   - **Hadoop configuration** que apunte a `fs.defaultFS` = `hdfs://192.168.99.10:9000`,  
   - o **Hadoop Configuration Resources** con `core-site.xml` (y si aplica `hdfs-site.xml`) del clúster.

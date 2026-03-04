@@ -40,3 +40,7 @@ spark-warehouse/
 
 # PDF del enunciado (evitar subir archivos pesados al repo)
 Proyecto Big Data.pdf
+
+# Resultados y visualizaciones generadas (opcional: quitar para versionar)
+resultados/
+grafo.png
