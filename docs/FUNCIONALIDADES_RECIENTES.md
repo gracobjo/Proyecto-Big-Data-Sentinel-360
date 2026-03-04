@@ -66,4 +66,23 @@ Documentación de las funcionalidades implementadas en las últimas fases: job d
 | `scripts/verificar_tablas_hive.sh` | Comprobar conteos en tablas Hive `transport` |
 | `./scripts/ingest_from_local.sh` | Subir warehouses, routes y raw a HDFS (poblar datos para Hive/Spark) |
 
+---
+
+## 6. Fase III – Streaming + escritura en Hive y MongoDB
+
+- **Script**: `spark/streaming/delays_windowed.py`
+- **Qué hace**: Job de **Structured Streaming** que lee eventos desde **Kafka** (tema `raw-data`) o desde **CSV en HDFS** (`/user/hadoop/proyecto/raw`). Agrupa por ventana de 15 minutos y `warehouse_id`, calcula media de retrasos y número de vehículos. En cada micro-batch (**foreachBatch**) escribe:
+  - **Hive**: tabla `transport.aggregated_delays`
+  - **MongoDB** (opcional): colección `transport.aggregated_delays` (requiere `pymongo` y MongoDB en marcha)
+- **Ejecución** (desde la raíz del proyecto):
+  ```bash
+  ./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py file   # entrada: HDFS raw
+  ./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py kafka  # entrada: Kafka raw-data
+  ```
+- **Salida en consola**: Se muestra el progreso de cada batch (JSON con `batchId`, offsets Kafka, watermark, sink `ForeachBatchSink`) y, cuando no hay datos nuevos, el mensaje periódico *"Streaming query has been idle and waiting for new data more than 10000 ms"* (comportamiento normal).
+- **Requisitos**: Tabla Hive `aggregated_delays` creada (schema 04); opcional MongoDB y `pip install pymongo`.
+- **Documentación**: `docs/FASE_III_STREAMING.md`, `docs/HOWTO_EJECUCION.md` (Supuesto 5).
+
+---
+
 Consultar **`docs/HOWTO_EJECUCION.md`** para el flujo completo de ejecución por supuestos.

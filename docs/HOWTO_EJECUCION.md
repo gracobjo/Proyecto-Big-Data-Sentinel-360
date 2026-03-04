@@ -120,21 +120,46 @@ Documentación: `docs/VISUALIZAR_GRAFOS.md`, `docs/FUNCIONALIDADES_RECIENTES.md`
 
 ---
 
-## Supuesto 5: Fase III – Streaming (opcional)
+## Supuesto 5: Fase III – Streaming + escritura en Hive y MongoDB
 
-Objetivo: ventanas de retrasos y/o carga multicapa (Hive + MongoDB).
+Objetivo: ventanas de retrasos (15 min) y carga multicapa: cada micro-batch se escribe en **Hive** (`transport.aggregated_delays`) y opcionalmente en **MongoDB** (colección `transport.aggregated_delays`).
+
+**Requisitos previos**
+
+- Tabla Hive creada: `beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/04_aggregated_reporting.sql`
+- MongoDB en marcha y colección creada (opcional): `mongosh < mongodb/scripts/init_collection.js` (crea `transport.aggregated_delays` e índices).
+- En la máquina donde lanzas `spark-submit`: `pip install pymongo` (solo si quieres escritura en MongoDB; si no, el job sigue escribiendo en Hive).
+
+**Ejecución**
 
 ```bash
-# Modo fichero (datos de ejemplo)
+# Modo fichero: lee CSVs desde HDFS raw (debe haber datos en /user/hadoop/proyecto/raw)
 ./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py file
 
-# Modo Kafka (si hay datos en el tema)
+# Modo Kafka: consume el tema raw-data
 ./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py kafka
 ```
 
-El job que escribe en `transport.aggregated_delays` y en MongoDB es `spark/streaming/write_to_hive_and_mongo.py` (integrar según tu flujo).
+El job es de larga duración (queda escuchando). Cada ventana completada se escribe en Hive y, si MongoDB está disponible y `pymongo` instalado, también en la colección `aggregated_delays`. Para detener: Ctrl+C.
 
-Documentación: `docs/KDD_FASES.md` (Fase III), `docs/SIGUIENTE_PASOS.md`.
+**Comprobar**
+
+```bash
+# Hive
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -e "USE transport; SELECT * FROM aggregated_delays LIMIT 10;"
+
+# MongoDB (si usaste MongoDB)
+mongosh --eval "db.getSiblingDB('transport').aggregated_delays.find().limit(5)"
+```
+
+**Carga batch desde Parquet (alternativa)**  
+Si los agregados se generan por otro proceso y quedan en HDFS en `procesado/aggregated_delays`, puedes volcarlos a Hive con:
+
+```bash
+./scripts/run_spark_submit.sh spark/streaming/write_to_hive_and_mongo.py
+```
+
+Documentación: `docs/FASE_III_STREAMING.md`, `docs/KDD_FASES.md`, `docs/SIGUIENTE_PASOS.md`.
 
 ---
 

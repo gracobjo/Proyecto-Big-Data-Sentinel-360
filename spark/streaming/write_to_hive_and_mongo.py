@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Fase III - Carga multicapa: agregados a Hive (Parquet). Estado por vehículo a MongoDB vía connector.
-Refactorizado para clúster: YARN, HDFS y tabla Hive desde config.
+Fase III - Carga multicapa (modo batch): leer Parquet de aggregated_delays y volcar a Hive.
+Usar cuando los agregados se hayan escrito en HDFS por otro proceso (p. ej. batch).
+El streaming en tiempo real usa delays_windowed.py con foreachBatch (Hive + MongoDB directo).
 """
 import sys
 import os

@@ -78,6 +78,7 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [ingest/nifi/FLUJO_HTTP_OPENWEATHER.md](ingest/nifi/FLUJO_HTTP_OPENWEATHER.md) | Configuración InvokeHTTP para OpenWeather |
 | [mongodb/README.md](mongodb/README.md) | Colección `transport.vehicle_state`, scripts de inicialización |
 | [docs/HOWTO_EJECUCION.md](docs/HOWTO_EJECUCION.md) | **Guía de ejecución**: paso a paso por supuestos (ingesta, Hive, Spark, grafos, streaming) |
+| [docs/FASE_III_STREAMING.md](docs/FASE_III_STREAMING.md) | Fase III: streaming (ventanas 15 min), escritura en Hive y MongoDB |
 | [docs/FUNCIONALIDADES_RECIENTES.md](docs/FUNCIONALIDADES_RECIENTES.md) | Grafos, visualización, verificación Hive y correcciones aplicadas |
 | [docs/VISUALIZAR_GRAFOS.md](docs/VISUALIZAR_GRAFOS.md) | Cómo ver los Parquet y generar grafo.png (red de almacenes y rutas) |
 | [docs/POBLAR_TABLAS_HIVE.md](docs/POBLAR_TABLAS_HIVE.md) | Cómo se pueblan las tablas de `transport` y script de verificación |

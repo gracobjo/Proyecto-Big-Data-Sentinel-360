@@ -1,5 +1,6 @@
 # Sentinel360 – Configuración centralizada del clúster (3 nodos: hadoop + nodo1 + nodo2)
 # Migración de red: sin localhost/127.0.0.1; uso de IPs estáticas.
+import os
 
 # Nodos
 MASTER_IP = "192.168.99.10"   # hadoop: NameNode, ResourceManager, Kafka, NiFi
@@ -42,3 +43,9 @@ HIVE_AGGREGATED_DELAYS_TABLE = "transport.aggregated_delays"
 
 # Checkpoint para Structured Streaming (en HDFS o local según despliegue)
 STREAMING_CHECKPOINT_PATH = f"{HDFS_NAMENODE}/user/{HDFS_USER}/proyecto/checkpoints/delays"
+
+# MongoDB (Fase III - carga multicapa: estado vehículos y/o agregados)
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB = "transport"
+MONGO_AGGREGATED_COLLECTION = "aggregated_delays"   # ventanas de retrasos para consultas de baja latencia
+MONGO_VEHICLE_STATE_COLLECTION = "vehicle_state"   # último estado por vehículo

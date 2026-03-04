@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Fase III - Structured Streaming: media de retrasos en ventanas de 15 minutos.
-Entrada: Kafka (192.168.99.10:9092) o directorio HDFS. Salida: consola.
-Refactorizado para clúster: Kafka bootstrap y rutas desde config.
+Entrada: Kafka (raw-data) o directorio HDFS. Salida: consola + Hive (aggregated_delays) + MongoDB (opcional).
+Refactorizado para clúster: Kafka bootstrap, rutas y tablas desde config.
 """
 import sys
 import os
@@ -18,6 +18,10 @@ from config import (
     KAFKA_TOPIC_RAW,
     HDFS_RAW_PATH,
     STREAMING_CHECKPOINT_PATH,
+    HIVE_AGGREGATED_DELAYS_TABLE,
+    MONGO_URI,
+    MONGO_DB,
+    MONGO_AGGREGATED_COLLECTION,
 )
 
 from pyspark.sql import SparkSession
@@ -32,8 +36,40 @@ def get_spark_session():
         .master(SPARK_MASTER)
         .config("spark.hadoop.fs.defaultFS", HDFS_NAMENODE)
         .config("spark.yarn.resourcemanager.hostname", "192.168.99.10")
+        .enableHiveSupport()
         .getOrCreate()
     )
+
+
+def write_batch_to_hive_and_mongo(batch_df, batch_id):
+    """Escribe el micro-batch en Hive (transport.aggregated_delays) y opcionalmente en MongoDB."""
+    if batch_df.isEmpty():
+        return
+    print(f"[batch {batch_id}] Escribiendo agregados en Hive y MongoDB...")
+    # Hive: append a la tabla (esquema: window_start, window_end, warehouse_id, avg_delay_min, vehicle_count)
+    batch_df.write.mode("append").insertInto(HIVE_AGGREGATED_DELAYS_TABLE)
+    # MongoDB (opcional): insertar documentos en transport.aggregated_delays
+    try:
+        import pymongo
+        client = pymongo.MongoClient(MONGO_URI)
+        db = client[MONGO_DB]
+        coll = db[MONGO_AGGREGATED_COLLECTION]
+        rows = batch_df.collect()
+        docs = []
+        for row in rows:
+            docs.append({
+                "window_start": row.window_start.isoformat() if hasattr(row.window_start, "isoformat") else str(row.window_start),
+                "window_end": row.window_end.isoformat() if hasattr(row.window_end, "isoformat") else str(row.window_end),
+                "warehouse_id": row.warehouse_id,
+                "avg_delay_min": float(row.avg_delay_min),
+                "vehicle_count": int(row.vehicle_count),
+            })
+        if docs:
+            coll.insert_many(docs)
+        client.close()
+    except Exception as e:
+        # MongoDB no disponible o pymongo no instalado: no fallar el streaming
+        pass
 
 
 def main(source: str = "file", input_path: str = None, checkpoint: str = None) -> None:
@@ -82,10 +118,10 @@ def main(source: str = "file", input_path: str = None, checkpoint: str = None) -
         )
     )
     q = (
-        windowed.writeStream.outputMode("append")
-        .format("console")
+        windowed.writeStream
+        .outputMode("append")
         .option("checkpointLocation", checkpoint)
-        .option("truncate", False)
+        .foreachBatch(write_batch_to_hive_and_mongo)
         .start()
     )
     q.awaitTermination()

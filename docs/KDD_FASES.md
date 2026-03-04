@@ -30,12 +30,12 @@ Resumen de cómo se implementa cada fase en Sentinel360 según el enunciado (cic
 
 ## Fase III – Minería y acción (streaming y carga multicapa)
 
-- **Objetivo**: Agregaciones en ventanas (p. ej. retrasos 15 min) y carga en Hive + MongoDB.
-- **Herramientas**: Spark Structured Streaming, Hive, MongoDB.
+- **Objetivo**: Agregaciones en ventanas (retrasos 15 min) y carga en Hive + MongoDB.
+- **Herramientas**: Spark Structured Streaming, Hive, MongoDB (opcional).
 - **Qué hace**:
-  - **delays_windowed.py**: consume desde Kafka (o ficheros), calcula ventanas → opcionalmente escribe agregados.
-  - **write_to_hive_and_mongo.py**: escribe agregados en `transport.aggregated_delays` (Hive) y estado de vehículos en MongoDB.
-- **Documentación**: `docs/SIGUIENTE_PASOS.md`, `mongodb/README.md`.
+  - **delays_windowed.py**: consume desde Kafka (tema `raw-data`) o desde CSV en HDFS raw; agrupa por ventana de 15 min y `warehouse_id`; en cada micro-batch escribe en **Hive** (`transport.aggregated_delays`) y, si está disponible, en **MongoDB** (colección `transport.aggregated_delays`) vía `foreachBatch`.
+  - **write_to_hive_and_mongo.py**: job batch que lee Parquet desde `procesado/aggregated_delays` e inserta en la tabla Hive (alternativa cuando los agregados se generan por otro proceso).
+- **Documentación**: `docs/FASE_III_STREAMING.md`, `docs/HOWTO_EJECUCION.md` (Supuesto 5), `mongodb/README.md`.
 
 ---
 
