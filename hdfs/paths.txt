@@ -1,0 +1,10 @@
+/user/hadoop/proyecto/raw
+/user/hadoop/proyecto/procesado
+/user/hadoop/proyecto/procesado/cleaned
+/user/hadoop/proyecto/procesado/enriched
+/user/hadoop/proyecto/procesado/graph
+/user/hadoop/proyecto/procesado/aggregated_delays
+/user/hadoop/proyecto/procesado/temp
+/user/hadoop/proyecto/warehouses
+/user/hadoop/proyecto/routes
+/user/hadoop/proyecto/checkpoints/delays

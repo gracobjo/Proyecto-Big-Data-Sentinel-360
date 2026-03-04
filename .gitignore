@@ -1,0 +1,42 @@
+# Logs y datos locales
+logs/
+*.log
+data/mongodb_db/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+env/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets (no subir claves)
+.env
+*.env.local
+*api*key*
+config/rutas_servicios.env
+
+# Datos generados (opcional: descomenta si no quieres subir sample)
+# data/sample/*.csv
+# data/sample/*.json
+
+# NiFi/Kafka temporales
+*.tmp
+.nifi/
+
+# Spark / Hadoop locales
+metastore_db/
+derby.log
+spark-warehouse/
+
+# PDF del enunciado (evitar subir archivos pesados al repo)
+Proyecto Big Data.pdf

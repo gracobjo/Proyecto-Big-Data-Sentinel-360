@@ -1,0 +1,6 @@
+warehouse_id,name,city,country,lat,lon,capacity
+WH-MAD,Almacen Madrid,Madrid,Spain,40.4168,-3.7038,1000
+WH-BCN,Almacen Barcelona,Barcelona,Spain,41.3851,2.1734,800
+WH-VLC,Almacen Valencia,Valencia,Spain,39.4699,-0.3763,600
+WH-BIL,Almacen Bilbao,Bilbao,Spain,43.2630,-2.9350,500
+WH-SEV,Almacen Sevilla,Sevilla,Spain,37.3891,-5.9845,700

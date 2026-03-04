@@ -1,0 +1,15 @@
+# Fuentes externas para NiFi (Fase I) - Ver ingest/nifi/README.md
+
+# 1) GPS ficticios: directorio a vigilar (GetFile)
+#    Ejemplo: /home/hadoop/Documentos/ProyectoBigData/data/sample
+#    Generar datos: python data/sample/generate_gps_logs.py
+
+# 2) HTTP: API pública (InvokeHTTP)
+#    OpenWeather: https://api.openweathermap.org/data/2.5/weather?lat=40.42&lon=-3.70&appid=${OPENWEATHER_API_KEY}&units=metric
+
+# Conexiones del clúster (usar en procesadores NiFi)
+KAFKA_BOOTSTRAP_SERVERS=192.168.99.10:9092
+KAFKA_TOPIC_RAW=raw-data
+KAFKA_TOPIC_FILTERED=filtered-data
+HDFS_NAMENODE=hdfs://192.168.99.10:9000
+HDFS_RAW_PATH=/user/hadoop/proyecto/raw
