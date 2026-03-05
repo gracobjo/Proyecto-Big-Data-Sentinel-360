@@ -504,5 +504,62 @@ Ejemplo de documento en MongoDB:
 }
 ```
 
+---
+
+## Supuesto 9: Alertas de anomalías en tiempo casi real
+
+Objetivo: mostrar en directo alertas generadas por el sistema cuando se detectan ventanas con retrasos elevados.
+
+### 1️⃣ Componentes implicados
+
+- **Streaming de retrasos**: `spark/streaming/delays_windowed.py`
+  - Calcula la media de retraso por ventana (15 min) y almacén.
+  - Marca como “anómalas” las ventanas con `avg_delay_min` por encima de un umbral (`STREAMING_ANOMALY_THRESHOLD_MIN`).
+  - Escribe los agregados en Hive y MongoDB.
+  - Envía alertas al topic Kafka `alerts`.
+- **Consumer de alertas**: `scripts/alerts_consumer.py`
+  - Escucha el topic `alerts`.
+  - Muestra por consola las alertas en formato JSON.
+
+### 2️⃣ Ejecutar el streaming con alertas
+
+En el nodo donde lances Spark (con Kafka y MongoDB ya en marcha):
+
+```bash
+./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py kafka
+```
+
+El job:
+
+- Leerá del topic configurado en `config.py` (`raw-data` o el que uses).
+- Calculará ventanas de retraso.
+- Escribirá en Hive y MongoDB.
+- Enviará alertas al topic `alerts` cuando `avg_delay_min` supere el umbral configurado.
+
+### 3️⃣ Lanzar el consumidor de alertas
+
+En otra terminal:
+
+```bash
+cd scripts
+python3 alerts_consumer.py
+```
+
+Verás en consola líneas similares:
+
+```text
+[ALERTA] {'type': 'ANOMALY_STREAMING', 'warehouse_id': 'WH_01', 'window_start': '2026-03-05T21:30:00', 'window_end': '2026-03-05T21:45:00', 'avg_delay_min': 24.3, 'vehicle_count': 12, 'threshold': 20.0}
+```
+
+### 4️⃣ Alimentar el sistema con el simulador
+
+Si quieres una demo completa:
+
+1. Lanzar el simulador GPS (`Supuesto 8`).
+2. Lanzar el streaming con alertas (`Supuesto 9`).
+3. Lanzar el consumer de alertas (`alerts_consumer.py`).
+
+A medida que el streaming detecte ventanas con mucho retraso, irán apareciendo alertas en la consola del consumer.
+
 
 Documentación relacionada: `README.md`, `docs/KDD_FASES.md`, `docs/ARRANQUE_SERVICIOS.md`.

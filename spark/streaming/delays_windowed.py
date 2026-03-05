@@ -29,6 +29,10 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
 
 
+# Umbral sencillo para marcar anomalías en streaming (ejemplo: retraso medio > 20 min)
+STREAMING_ANOMALY_THRESHOLD_MIN = 20.0
+
+
 def get_spark_session():
     return (
         SparkSession.builder
@@ -42,7 +46,8 @@ def get_spark_session():
 
 
 def write_batch_to_hive_and_mongo(batch_df, batch_id):
-    """Escribe el micro-batch en Hive (transport.aggregated_delays) y opcionalmente en MongoDB."""
+    """Escribe el micro-batch en Hive (transport.aggregated_delays),
+    opcionalmente en MongoDB y genera alertas de anomalías en Kafka."""
     if batch_df.isEmpty():
         return
     print(f"[batch {batch_id}] Escribiendo agregados en Hive y MongoDB...")
@@ -51,23 +56,60 @@ def write_batch_to_hive_and_mongo(batch_df, batch_id):
     # MongoDB (opcional): insertar documentos en transport.aggregated_delays
     try:
         import pymongo
+
         client = pymongo.MongoClient(MONGO_URI)
         db = client[MONGO_DB]
         coll = db[MONGO_AGGREGATED_COLLECTION]
         rows = batch_df.collect()
         docs = []
         for row in rows:
-            docs.append({
-                "window_start": row.window_start.isoformat() if hasattr(row.window_start, "isoformat") else str(row.window_start),
-                "window_end": row.window_end.isoformat() if hasattr(row.window_end, "isoformat") else str(row.window_end),
-                "warehouse_id": row.warehouse_id,
-                "avg_delay_min": float(row.avg_delay_min),
-                "vehicle_count": int(row.vehicle_count),
-            })
+            docs.append(
+                {
+                    "window_start": row.window_start.isoformat()
+                    if hasattr(row.window_start, "isoformat")
+                    else str(row.window_start),
+                    "window_end": row.window_end.isoformat()
+                    if hasattr(row.window_end, "isoformat")
+                    else str(row.window_end),
+                    "warehouse_id": row.warehouse_id,
+                    "avg_delay_min": float(row.avg_delay_min),
+                    "vehicle_count": int(row.vehicle_count),
+                }
+            )
         if docs:
             coll.insert_many(docs)
+
+        # Generar alertas de anomalía en streaming (Kafka topic alerts)
+        # Criterio simple: ventanas con avg_delay_min por encima del umbral.
+        anomalous_rows = [d for d in docs if d["avg_delay_min"] > STREAMING_ANOMALY_THRESHOLD_MIN]
+        if anomalous_rows:
+            try:
+                from kafka import KafkaProducer
+                import json
+
+                producer = KafkaProducer(
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                )
+                for d in anomalous_rows:
+                    alert = {
+                        "type": "ANOMALY_STREAMING",
+                        "warehouse_id": d["warehouse_id"],
+                        "window_start": d["window_start"],
+                        "window_end": d["window_end"],
+                        "avg_delay_min": d["avg_delay_min"],
+                        "vehicle_count": d["vehicle_count"],
+                        "threshold": STREAMING_ANOMALY_THRESHOLD_MIN,
+                    }
+                    producer.send("alerts", alert)
+                producer.flush()
+                producer.close()
+                print(f"[batch {batch_id}] Enviadas {len(anomalous_rows)} alertas de anomalía a Kafka (topic alerts).")
+            except Exception as exc:
+                print(f"[batch {batch_id}] No se pudieron enviar alertas de anomalía a Kafka: {exc}")
+
         client.close()
-    except Exception as e:
+    except Exception:
         # MongoDB no disponible o pymongo no instalado: no fallar el streaming
         pass
 
