@@ -50,6 +50,8 @@ Sentinel360/   (o ProyectoBigData/ según nombre de la carpeta local)
 - **Kafka**: `192.168.99.10:9092`
 - **YARN Web UI**: http://192.168.99.10:8088
 
+**Topics Kafka del proyecto** (solo dos): **raw-data** (entrada principal: NiFi GPS + OpenWeather) y **filtered-data** (datos filtrados, consumo downstream). Ver y comprobar: `docs/KAFKA_TOPICS_SENTINEL360.md`, `./scripts/verificar_topics_kafka.sh`.
+
 Toda la configuración de Sentinel360 (IPs, rutas, temas) está centralizada en **`config.py`**. Los scripts Python importan estas variables.
 
 ## Rutas HDFS (Sentinel360)
@@ -87,6 +89,8 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [ingest/nifi/FASE_I_INGESTA.md](ingest/nifi/FASE_I_INGESTA.md) | Flujos NiFi (GPS, HTTP), PutHDFS, temas Kafka |
 | [ingest/nifi/FLUJO_HTTP_OPENWEATHER.md](ingest/nifi/FLUJO_HTTP_OPENWEATHER.md) | Configuración InvokeHTTP para OpenWeather |
 | [mongodb/README.md](mongodb/README.md) | Colección `transport.vehicle_state`, scripts de inicialización |
+| [docs/KAFKA_TOPICS_SENTINEL360.md](docs/KAFKA_TOPICS_SENTINEL360.md) | **Topics del proyecto**: raw-data (entrada NiFi) y filtered-data (filtrados) |
+| [docs/HIVE_SENTINEL360.md](docs/HIVE_SENTINEL360.md) | **Hive**: dónde buscar, crear tablas (crear_tablas_hive.sh), poblar y comprobar |
 | [docs/HOWTO_EJECUCION.md](docs/HOWTO_EJECUCION.md) | **Guía de ejecución**: paso a paso por supuestos (ingesta, Hive, Spark, grafos, streaming) |
 | [docs/FASE_III_STREAMING.md](docs/FASE_III_STREAMING.md) | Fase III: streaming (ventanas 15 min), escritura en Hive y MongoDB |
 | [docs/FUNCIONALIDADES_RECIENTES.md](docs/FUNCIONALIDADES_RECIENTES.md) | Grafos, visualización, verificación Hive y correcciones aplicadas |

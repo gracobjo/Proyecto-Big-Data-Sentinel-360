@@ -48,12 +48,17 @@ Documentación: `ingest/nifi/FASE_I_INGESTA.md`, `ingest/nifi/FLUJO_HTTP_OPENWEA
 Objetivo: base de datos `transport` con tablas warehouses, routes, events_raw, aggregated_delays.
 
 1. Asegurar que HiveServer2 y el metastore están en marcha (por ejemplo con `start_servicios.sh`; MariaDB debe estar levantada antes que Hive).
-2. Crear base y tablas con Beeline (mismo Hive que usarás para consultas):
+2. Crear base y tablas con Beeline (un solo comando o uno por script):
+   ```bash
+   ./scripts/crear_tablas_hive.sh
+   ```
+   O a mano (01 a 05):
    ```bash
    beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/01_warehouses.sql
    beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/02_routes.sql
    beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/03_events_raw.sql
    beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/04_aggregated_reporting.sql
+   beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/05_reporte_diario.sql
    ```
 3. Poblar datos maestros en HDFS (las tablas EXTERNAL leen de ahí):
    ```bash
@@ -65,7 +70,7 @@ Objetivo: base de datos `transport` con tablas warehouses, routes, events_raw, a
    ./scripts/verificar_tablas_hive.sh
    ```
 
-Documentación: `hive/README.md`, `docs/POBLAR_TABLAS_HIVE.md`.
+Documentación: `docs/HIVE_SENTINEL360.md`, `hive/README.md`, `docs/POBLAR_TABLAS_HIVE.md`.
 
 ---
 
