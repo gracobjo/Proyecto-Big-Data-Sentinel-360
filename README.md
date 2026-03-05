@@ -2,6 +2,14 @@
 
 Monitorización de red de transporte global siguiendo el ciclo **KDD** (Knowledge Discovery in Databases) con stack Apache.
 
+## Por qué el nombre Sentinel360
+
+- **Sentinel**: hace referencia a un **sistema de vigilancia** que monitoriza continuamente el estado de la red de transporte.
+- **360**: alude a una **visión completa del sistema**, combinando:
+  - **Datos en tiempo real** (streaming, estado de vehículos).
+  - **Datos históricos** (almacenamiento y agregados para análisis).
+  - **Análisis predictivo** (modelos y KPIs que ayudan a anticipar incidencias).
+
 ## Stack utilizado
 
 | Componente     | Tecnología                    | Uso en Sentinel360                           |

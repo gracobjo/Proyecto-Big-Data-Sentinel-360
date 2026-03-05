@@ -12,6 +12,14 @@ El objetivo es que, en la demo del máster, puedas mostrar:
 - El flujo de datos extremo a extremo (desde la ingesta hasta los KPIs).
 - Dashboards interactivos que se actualizan a partir de los datos procesados.
 
+### Recordatorio: significado de Sentinel 360
+
+- **Sentinel**: sistema de vigilancia que monitoriza la red de transporte.
+- **360**: visión completa del sistema, combinando:
+  - **Datos en tiempo real** (streaming y estado de vehículos).
+  - **Datos históricos** (almacenamiento y agregados).
+  - **Análisis predictivo** (modelos y métricas avanzadas que anticipan problemas).
+
 ---
 
 ## Arquitectura propuesta para la demo
