@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: sentinel360-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: sentinel360_analytics
+      MYSQL_USER: sentinel
+      MYSQL_PASSWORD: sentinel_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  superset:
+    image: apache/superset:latest
+    container_name: sentinel360-superset
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_ENV: production
+      SUPERSET_LOAD_EXAMPLES: "no"
+    depends_on:
+      - mariadb
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sentinel360-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  tools:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tools
+    container_name: sentinel360-tools
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ..:/app
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "192.168.99.10:9092"
+      MONGO_URI: "mongodb://192.168.99.10:27017"
+    # Puedes usar este contenedor para ejecutar scripts como:
+    # docker compose run --rm tools python scripts/gps_simulator.py
+
+volumes:
+  mariadb_data:
+  grafana_data:
+

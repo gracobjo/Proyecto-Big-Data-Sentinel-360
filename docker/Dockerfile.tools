@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY docker/requirements-tools.txt /app/requirements-tools.txt
+
+RUN pip install --no-cache-dir -r requirements-tools.txt
+
+# El código del proyecto se montará como volumen en docker-compose,
+# por lo que no se copia aquí.
+
+CMD ["bash"]
+

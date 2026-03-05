@@ -121,3 +121,34 @@ El procesamiento de ventanas de 15 minutos en Spark Streaming es el núcleo de l
 
 En conclusión, Sentinel360 constituye un **ecosistema cohesivo** que, bajo la dirección de una arquitectura distribuida y el rigor del ciclo KDD, transforma el caos de los datos de transporte en una **red logística inteligente y monitorizada**.
 
+---
+
+### 7. Preparación para despliegues dockerizados (entorno de demo)
+
+Aunque el clúster Big Data (Hadoop, Kafka, Spark, Hive, NiFi) se ejecuta sobre máquinas físicas/VMs, el proyecto incluye una carpeta `docker/` pensada para facilitar:
+
+- El despliegue rápido de:
+  - MariaDB (`sentinel360_analytics`).
+  - Superset.
+  - Grafana.
+- Un contenedor de utilidades (`tools`) desde el que lanzar scripts del proyecto.
+
+Ficheros relevantes:
+
+- `docker/docker-compose.yml`: orquesta los contenedores de MariaDB, Superset, Grafana y `tools`.
+- `docker/Dockerfile.tools`: imagen base Python para ejecutar scripts del repositorio.
+- `docker/requirements-tools.txt`: dependencias necesarias para `gps_simulator.py`, consumer de alertas, etc.
+
+Ejemplo de uso:
+
+```bash
+cd docker
+docker compose up -d
+
+# Ejecutar el simulador desde el contenedor tools
+docker compose run --rm tools python scripts/gps_simulator.py
+```
+
+Con este enfoque, partes importantes de la capa de visualización y utilidades pueden ejecutarse en entornos como Render o servidores Docker dedicados, mientras el clúster Big Data permanece desplegado sobre los nodos on-premise.
+
+

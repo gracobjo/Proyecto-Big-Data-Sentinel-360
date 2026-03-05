@@ -32,7 +32,9 @@ Sentinel360/   (o ProyectoBigData/ según nombre de la carpeta local)
 ├── airflow/             # Fase IV: DAGs Airflow
 ├── hdfs/                # Rutas y scripts HDFS
 ├── data/                # Datos de ejemplo y logs simulados
-├── docs/                # Documentación y diagramas
+├── docs/                # Documentación, diagramas e infografías
+├── docker/              # Ficheros de apoyo para despliegues dockerizados
+├── unnamed.png          # Infografía general de la arquitectura Sentinel360
 └── scripts/             # Utilidades y lanzamiento
 ```
 
