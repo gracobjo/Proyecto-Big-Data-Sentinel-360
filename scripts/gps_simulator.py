@@ -3,19 +3,24 @@
 Simulador realista de datos GPS para Sentinel360.
 
 Genera posiciones de una flota de autobuses y las envía continuamente
-al topic de Kafka `gps-events`, actuando como fuente de ingesta en tiempo real.
+al topic de Kafka configurado en config.py (por defecto gps-events).
 """
 
 import json
+import os
+import sys
 import time
 import random
 from datetime import datetime
 
+# Asegurar que el proyecto está en el path para importar config
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_script_dir, ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC_GPS_EVENTS  # type: ignore
 from kafka import KafkaProducer
-
-
-KAFKA_BOOTSTRAP_SERVERS = "nodo1:9092"
-TOPIC = "gps-events"
 
 
 def create_producer() -> KafkaProducer:
@@ -35,7 +40,7 @@ def main() -> None:
     lat_base = 41.65
     lon_base = -4.72
 
-    print(f"Enviando eventos GPS simulados a Kafka ({TOPIC}) con coordenadas reales aproximadas...")
+    print(f"Enviando eventos GPS simulados a Kafka ({KAFKA_TOPIC_GPS_EVENTS}) con coordenadas reales aproximadas...")
 
     while True:
         data = {
@@ -48,7 +53,7 @@ def main() -> None:
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-        producer.send(TOPIC, data)
+        producer.send(KAFKA_TOPIC_GPS_EVENTS, data)
         print(data)
 
         time.sleep(1)

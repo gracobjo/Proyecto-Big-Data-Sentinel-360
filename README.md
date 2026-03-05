@@ -97,4 +97,4 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/ARQUITECTURA_SENTINEL360.md](docs/ARQUITECTURA_SENTINEL360.md) | Visión arquitectónica de alto nivel (clúster, KDD, stack Apache, almacenamiento) |
 | [docs/AIRFLOW_DAGS.md](docs/AIRFLOW_DAGS.md) | Cómo integrar y ejecutar los DAGs de Sentinel360 en Apache Airflow |
 
-**Configuración central de Sentinel360**: IPs, rutas HDFS, Kafka y Hive están en **`config.py`**; los jobs Spark e ingest lo importan.
+**Configuración central de Sentinel360**: IPs, rutas HDFS, Kafka (incl. temas `gps-events` y `alerts`), Hive, MongoDB (incl. colección `anomalies`) y MariaDB (`sentinel360_analytics`) están en **`config.py`**; los scripts Python y jobs Spark importan las variables que necesitan. Para sobrescribir en un entorno concreto puedes usar variables de entorno (p. ej. `MONGO_URI`, `MARIA_DB_URI`).

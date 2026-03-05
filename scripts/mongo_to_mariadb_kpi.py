@@ -6,33 +6,46 @@ Script de ejemplo para poblar las tablas de KPIs en MariaDB a partir de:
 
 Pensado como referencia para la demo del máster: puedes ejecutarlo de forma
 standalone o integrarlo en un DAG de Airflow.
+
+La configuración de MongoDB y MariaDB se lee desde config.py (variables
+MONGO_URI, MONGO_DB, MONGO_AGGREGATED_COLLECTION, MARIA_DB_URI).
+Las variables de entorno del mismo nombre sobrescriben las de config si se desea.
 """
 
 import os
+import sys
 from datetime import datetime
 from typing import Iterable, Dict, Any
+
+# Asegurar que el proyecto está en el path para importar config
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_script_dir, ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+try:
+    from config import (
+        MONGO_URI,
+        MONGO_DB,
+        MONGO_AGGREGATED_COLLECTION,
+        MARIA_DB_URI,
+    )
+except ImportError:
+    MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+    MONGO_DB = os.environ.get("MONGO_DB", "transport")
+    MONGO_AGGREGATED_COLLECTION = os.environ.get("MONGO_COLLECTION", "aggregated_delays")
+    MARIA_DB_URI = os.environ.get(
+        "MARIA_DB_URI",
+        "mysql+pymysql://sentinel:sentinel_password@localhost:3306/sentinel360_analytics",
+    )
+
+# Si prefieres leer de Parquet en lugar de Mongo, ajusta esta ruta:
+PARQUET_DIR = os.environ.get("PARQUET_DIR", os.path.join(_project_root, "resultados"))
 
 from pymongo import MongoClient
 import pandas as pd
 import sqlalchemy
 from sqlalchemy.engine import Engine
-
-
-# ---------------------------------------------------------------------------
-# Configuración (ajusta estos valores a tu entorno)
-# ---------------------------------------------------------------------------
-
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB = os.getenv("MONGO_DB", "transport")
-MONGO_COLLECTION = os.getenv("MONGO_COLLECTION", "aggregated_delays")
-
-MARIA_DB_URI = os.getenv(
-    "MARIA_DB_URI",
-    "mysql+pymysql://sentinel:sentinel_password@localhost:3306/sentinel360_analytics",
-)
-
-# Si prefieres leer de Parquet en lugar de Mongo, ajusta esta ruta:
-PARQUET_DIR = os.getenv("PARQUET_DIR", "resultados")
 
 
 def get_mongo_client() -> MongoClient:
@@ -53,7 +66,7 @@ def fetch_from_mongo() -> pd.DataFrame:
       - trips_count, delayed_trips, avg_delay_minutes, max_delay_minutes
     """
     client = get_mongo_client()
-    coll = client[MONGO_DB][MONGO_COLLECTION]
+    coll = client[MONGO_DB][MONGO_AGGREGATED_COLLECTION]
 
     cursor: Iterable[Dict[str, Any]] = coll.find({})
     docs = list(cursor)

@@ -16,6 +16,7 @@ from config import (
     SPARK_MASTER,
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_TOPIC_RAW,
+    KAFKA_TOPIC_ALERTS,
     HDFS_RAW_PATH,
     STREAMING_CHECKPOINT_PATH,
     HIVE_AGGREGATED_DELAYS_TABLE,
@@ -101,7 +102,7 @@ def write_batch_to_hive_and_mongo(batch_df, batch_id):
                         "vehicle_count": d["vehicle_count"],
                         "threshold": STREAMING_ANOMALY_THRESHOLD_MIN,
                     }
-                    producer.send("alerts", alert)
+                    producer.send(KAFKA_TOPIC_ALERTS, alert)
                 producer.flush()
                 producer.close()
                 print(f"[batch {batch_id}] Enviadas {len(anomalous_rows)} alertas de anomalía a Kafka (topic alerts).")

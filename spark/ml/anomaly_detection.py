@@ -24,7 +24,9 @@ from config import (  # type: ignore
     HIVE_AGGREGATED_DELAYS_TABLE,
     MONGO_URI,
     MONGO_DB,
+    MONGO_ANOMALIES_COLLECTION,
     KAFKA_BOOTSTRAP_SERVERS,
+    KAFKA_TOPIC_ALERTS,
 )
 
 from pyspark.sql import SparkSession, DataFrame
@@ -114,7 +116,7 @@ def write_anomalies_to_mongo_and_kafka(df: DataFrame) -> None:
 
     client = pymongo.MongoClient(MONGO_URI)
     db = client[MONGO_DB]
-    coll = db["anomalies"]
+    coll = db[MONGO_ANOMALIES_COLLECTION]
 
     docs = []
     for row in rows:
@@ -158,7 +160,7 @@ def write_anomalies_to_mongo_and_kafka(df: DataFrame) -> None:
                     "cluster": doc["cluster"],
                     "timestamp": doc["window_end"],
                 }
-                producer.send("alerts", alert)
+                producer.send(KAFKA_TOPIC_ALERTS, alert)
 
             producer.flush()
             producer.close()
