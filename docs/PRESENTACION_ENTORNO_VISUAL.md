@@ -196,9 +196,9 @@ En Superset:
 
 ---
 
-## Extensiones avanzadas (para destacar en la defensa) – *pendiente de implementación completa*
+## Extensiones avanzadas (para destacar en la defensa)
 
-A continuación se describen líneas de mejora que la arquitectura ya soporta, pero que están **parcial o totalmente pendientes de implementación**:
+A continuación se describen líneas de mejora que la arquitectura ya soporta. Algunas cuentan con un **prototipo implementado** y otras están pendientes de una capa de visualización más avanzada:
 
 - **Simulador GPS con coordenadas reales** (parcialmente implementado)
   - `scripts/gps_simulator.py` genera eventos con `lat` y `lon` realistas (zona Valladolid), además de `speed` y `delay_minutes`.
@@ -206,15 +206,14 @@ A continuación se describen líneas de mejora que la arquitectura ya soporta, p
     - Mapas de flota (posición actual de cada bus).
     - Análisis espacial (rutas más congestionadas, zonas problemáticas).
 
-- **IA con Spark ML (detección de anomalías y predicción)** (pendiente de implementación)
-  - Sobre los datos históricos en Hive y los streams en Kafka, se pueden construir modelos que:
-    - Detecten **anomalías** (velocidades imposibles, retrasos anómalos).
-    - Predigan **retraso esperado** por vehículo/ruta/hora.
-  - Los resultados pueden guardarse en:
-    - **MongoDB** (estado actual enriquecido con `anomaly_flag` o `delay_pred`).
-    - **MariaDB** (nuevas tablas de KPIs para dashboards).
+- **IA con Spark ML (detección de anomalías y predicción)** (prototipo de anomalías implementado)
+  - Sobre los datos agregados de retrasos en Hive (`transport.aggregated_delays`), el script `spark/ml/anomaly_detection.py`:
+    - Entrena un modelo K-Means sobre (`avg_delay_min`, `vehicle_count`).
+    - Marca como anómalos los registros del cluster con mayor retraso medio.
+    - Escribe las anomalías en la colección MongoDB `transport.anomalies`.
+  - A partir de esta colección se puede construir un dashboard de anomalías en Superset o Grafana.
 
-- **Monitorización en tiempo real** (pendiente de implementación)
+- **Monitorización en tiempo real** (pendiente de implementación completa)
   - Además de Superset (orientado a KPIs y análisis), se puede conectar:
     - **Grafana** a MongoDB para paneles operacionales en tiempo casi real.
   - Ejemplos de paneles:

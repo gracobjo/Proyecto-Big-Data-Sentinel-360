@@ -91,5 +91,7 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/VISUALIZAR_GRAFOS.md](docs/VISUALIZAR_GRAFOS.md) | Cómo ver los Parquet y generar grafo.png (red de almacenes y rutas) |
 | [docs/POBLAR_TABLAS_HIVE.md](docs/POBLAR_TABLAS_HIVE.md) | Cómo se pueblan las tablas de `transport` y script de verificación |
 | [docs/PRESENTACION_ENTORNO_VISUAL.md](docs/PRESENTACION_ENTORNO_VISUAL.md) | Entorno visual para la demo: MariaDB + Superset, KPIs y dashboards |
+| [docs/CASOS_DE_USO.md](docs/CASOS_DE_USO.md) | Casos de uso de Sentinel360 (operador, planificación, anomalías, simulación) |
+| [docs/ARQUITECTURA_SENTINEL360.md](docs/ARQUITECTURA_SENTINEL360.md) | Visión arquitectónica de alto nivel (clúster, KDD, stack Apache, almacenamiento) |
 
 **Configuración central de Sentinel360**: IPs, rutas HDFS, Kafka y Hive están en **`config.py`**; los jobs Spark e ingest lo importan.
