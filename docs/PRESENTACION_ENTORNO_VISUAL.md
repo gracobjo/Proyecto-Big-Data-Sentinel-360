@@ -194,3 +194,31 @@ En Superset:
      - Analítica y visualización (MariaDB + Superset).
    - Explicar posibles extensiones futuras (más KPIs, alertas, otros tipos de visualización).
 
+---
+
+## Extensiones avanzadas (para destacar en la defensa)
+
+Aunque no estén todas implementadas al 100 %, puedes mencionarlas como líneas de mejora ya preparadas por la arquitectura:
+
+- **Simulador GPS con coordenadas reales**
+  - `scripts/gps_simulator.py` genera eventos con `lat` y `lon` realistas (zona Valladolid), además de `speed` y `delay_minutes`.
+  - Estos datos permiten:
+    - Mapas de flota (posición actual de cada bus).
+    - Análisis espacial (rutas más congestionadas, zonas problemáticas).
+
+- **IA con Spark ML (detección de anomalías y predicción)**
+  - Sobre los datos históricos en Hive y los streams en Kafka, se pueden construir modelos que:
+    - Detecten **anomalías** (velocidades imposibles, retrasos anómalos).
+    - Predigan **retraso esperado** por vehículo/ruta/hora.
+  - Los resultados pueden guardarse en:
+    - **MongoDB** (estado actual enriquecido con `anomaly_flag` o `delay_pred`).
+    - **MariaDB** (nuevas tablas de KPIs para dashboards).
+
+- **Monitorización en tiempo real**
+  - Además de Superset (orientado a KPIs y análisis), se puede conectar:
+    - **Grafana** a MongoDB para paneles operacionales en tiempo casi real.
+  - Ejemplos de paneles:
+    - Mapa de la flota.
+    - Retraso medio por ruta.
+    - Lista de vehículos con anomalías activas.
+

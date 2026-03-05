@@ -28,18 +28,21 @@ def create_producer() -> KafkaProducer:
 def main() -> None:
     producer = create_producer()
 
-    vehicles = [f"BUS_{i:02d}" for i in range(1, 21)]
-    routes = ["R1", "R2", "R3", "R4", "R5"]
+    vehicles = [f"BUS_{i:02d}" for i in range(1, 20)]
+    routes = ["R1", "R2", "R3"]
 
-    print(f"Enviando eventos GPS simulados a Kafka ({TOPIC})...")
+    # Zona Valladolid aproximada (lat/lon base)
+    lat_base = 41.65
+    lon_base = -4.72
+
+    print(f"Enviando eventos GPS simulados a Kafka ({TOPIC}) con coordenadas reales aproximadas...")
 
     while True:
-        vehicle = random.choice(vehicles)
-        route = random.choice(routes)
-
         data = {
-            "vehicle_id": vehicle,
-            "route_id": route,
+            "vehicle_id": random.choice(vehicles),
+            "route_id": random.choice(routes),
+            "lat": lat_base + random.uniform(-0.01, 0.01),
+            "lon": lon_base + random.uniform(-0.01, 0.01),
             "speed": random.randint(20, 60),
             "delay_minutes": round(random.uniform(0, 5), 2),
             "timestamp": datetime.utcnow().isoformat(),
