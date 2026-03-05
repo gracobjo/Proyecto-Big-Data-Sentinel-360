@@ -93,5 +93,6 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/PRESENTACION_ENTORNO_VISUAL.md](docs/PRESENTACION_ENTORNO_VISUAL.md) | Entorno visual para la demo: MariaDB + Superset, KPIs y dashboards |
 | [docs/CASOS_DE_USO.md](docs/CASOS_DE_USO.md) | Casos de uso de Sentinel360 (operador, planificación, anomalías, simulación) |
 | [docs/ARQUITECTURA_SENTINEL360.md](docs/ARQUITECTURA_SENTINEL360.md) | Visión arquitectónica de alto nivel (clúster, KDD, stack Apache, almacenamiento) |
+| [docs/AIRFLOW_DAGS.md](docs/AIRFLOW_DAGS.md) | Cómo integrar y ejecutar los DAGs de Sentinel360 en Apache Airflow |
 
 **Configuración central de Sentinel360**: IPs, rutas HDFS, Kafka y Hive están en **`config.py`**; los jobs Spark e ingest lo importan.
