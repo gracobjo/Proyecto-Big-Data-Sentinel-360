@@ -10,6 +10,8 @@ Según el enunciado:
 
 ## Resumen de flujos
 
+Para una **revisión del esquema de procesadores** (qué falta, qué añadir, flujo GPS vs HTTP event-driven), ver **[ESQUEMA_PROCESADORES_REVISION.md](ESQUEMA_PROCESADORES_REVISION.md)**.
+
 | Flujo        | Fuente              | Kafka (crudo) | Kafka (filtrado) | HDFS raw |
 |-------------|---------------------|---------------|-------------------|----------|
 | **GPS**     | GetFile (logs)      | ✅ raw-data   | ✅ filtered-data  | ✅ PutHDFS |
@@ -22,10 +24,34 @@ Según el enunciado:
 
 ## 1. Flujo GPS (ya importable)
 
-- Archivo: **`ingest/gps_transport_flow_importable.json`**.
-- Hoy: GetFile → PublishKafka (`filtered-data`).
+- Archivo: **`ingest/gps_transport_flow_importable.json`** (si lo tienes en local; el repo solo documenta el flujo).
+- **Estado actual del grupo**: GetFile → PublishKafka (`filtered-data`). Con eso solo **no cumple** Fase I: faltan tema `raw-data` y copia raw en HDFS.
 
-**Para cumplir Fase I en el flujo GPS:**
+### Qué hacer con el grupo `gps_transport_flow_importable`
+
+Añadir en la UI de NiFi **dos cosas**, ambas conectadas desde **GetFile (success)**:
+
+| Qué añadir | Cómo |
+|------------|------|
+| **1. PublishKafka a raw-data** | Añadir otro **PublishKafka**. En **Topic Name** poner **`raw-data`**. Conectar **GetFile (success)** → este PublishKafka. |
+| **2. PutHDFS (copia raw)** | Añadir **PutHDFS**. **Directory** = **`/user/hadoop/proyecto/raw`**. Configurar **Controller Service** HDFS (NameNode `hdfs://192.168.99.10:9000`). Conectar **GetFile (success)** → **PutHDFS**. |
+
+Resultado del flujo:
+
+```
+GetFile (success) ──┬──> PublishKafka (filtered-data)   [ya lo tienes]
+                    ├──> PublishKafka (raw-data)        [AÑADIR]
+                    └──> PutHDFS                        [AÑADIR]
+```
+
+**Checklist rápido:**
+
+1. Añadir PublishKafka → Topic **`raw-data`**; conectar GetFile (success) a él.
+2. Añadir PutHDFS → Directory **`/user/hadoop/proyecto/raw`**; Controller Service HDFS con **`hdfs://192.168.99.10:9000`**; conectar GetFile (success) a PutHDFS.
+3. Controller Service de Kafka habilitado; temas creados con `./scripts/preparar_ingesta_nifi.sh` si hace falta.
+4. Arrancar el grupo; comprobar con `kafka-console-consumer` en `raw-data` y `filtered-data`, y `hdfs dfs -ls /user/hadoop/proyecto/raw`.
+
+**Para cumplir Fase I en el flujo GPS (resumen):**
 
 1. Añadir **PublishKafka** al tema **`raw-data`**: duplicar el PublishKafka (o añadir otro) y configurar Topic = `raw-data`; conectar **GetFile (success)** a este segundo PublishKafka.
 2. Añadir **PutHDFS**: arrastrar **PutHDFS**, Directory = `/user/hadoop/proyecto/raw`. Configurar **HDFS Connection** (Controller Service tipo HDFS con NameNode `hdfs://192.168.99.10:9000`). Conectar **GetFile (success)** → **PutHDFS**.

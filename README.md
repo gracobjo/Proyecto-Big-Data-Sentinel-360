@@ -93,6 +93,7 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/HIVE_SENTINEL360.md](docs/HIVE_SENTINEL360.md) | **Hive**: dónde buscar, crear tablas (crear_tablas_hive.sh), poblar y comprobar |
 | [docs/HOWTO_EJECUCION.md](docs/HOWTO_EJECUCION.md) | **Guía de ejecución**: paso a paso por supuestos (ingesta, Hive, Spark, grafos, streaming) |
 | [docs/GUION_PRESENTACION.md](docs/GUION_PRESENTACION.md) | **Guion corto** para la defensa: orden de pasos y tabla de scripts (qué hace cada uno, entrada/salida) |
+| [data/sample/README.md](data/sample/README.md) | **Origen de los datos**: GPS, rutas (`routes.csv`), almacenes (`warehouses.csv`); de dónde salen y cómo se usan |
 | [docs/FASE_III_STREAMING.md](docs/FASE_III_STREAMING.md) | Fase III: streaming (ventanas 15 min), escritura en Hive y MongoDB |
 | [docs/FUNCIONALIDADES_RECIENTES.md](docs/FUNCIONALIDADES_RECIENTES.md) | Grafos, visualización, verificación Hive y correcciones aplicadas |
 | [docs/VISUALIZAR_GRAFOS.md](docs/VISUALIZAR_GRAFOS.md) | Cómo ver los Parquet y generar grafo.png (red de almacenes y rutas) |

@@ -11,6 +11,47 @@ Está pensado para poder copiarse casi tal cual a la memoria del proyecto.
 
 ---
 
+## Origen de los datos
+
+Los datos de entrada de Sentinel360 provienen de tres fuentes principales:
+
+| Dato | Archivo / origen | Descripción breve |
+|------|------------------|-------------------|
+| **GPS + tiempo** | `data/sample/gps_events.csv`, simulador `scripts/gps_simulator.py`, NiFi | Eventos de telemetría: posición (lat/lon), velocidad, `vehicle_id`, **timestamp** (`ts`). Son la base del streaming y de los agregados por ventana. |
+| **Rutas** | **`data/sample/routes.csv`** | Catálogo maestro de rutas entre almacenes: `route_id`, `from_warehouse_id`, `to_warehouse_id`, `distance_km`, `avg_duration_min`. Define la topología de la red (aristas del grafo). |
+| **Almacenes** | `data/sample/warehouses.csv` | Catálogo maestro de centros logísticos: `warehouse_id`, nombre, ciudad, lat/lon, capacidad. Nodos del grafo y contexto para enriquecimiento. |
+
+El script `scripts/ingest_from_local.sh` sube estos CSV a HDFS; las tablas Hive `transport.warehouses` y `transport.routes` apuntan a esas rutas. Detalle de cada archivo, campos y uso: **[data/sample/README.md](../data/sample/README.md)**.
+
+---
+
+## Factores que afectan los resultados: tiempo y otras variables
+
+### Cómo afecta el tiempo (y qué sí tenemos en cuenta)
+
+- **Ventanas temporales**: El streaming agrupa eventos por ventanas de tiempo (p. ej. 15 minutos). El **timestamp** de cada evento (`ts`) determina a qué ventana pertenece y, por tanto, los agregados de retraso por ventana (Hive, MongoDB, alertas).
+- **Agregados históricos**: En Hive y MariaDB se pueden hacer consultas por **hora del día**, **día de la semana** o **mes**. El tiempo es la dimensión principal para ver “a qué horas/días hay más retrasos” y para planificación (CU2).
+- **Alertas en tiempo casi real**: Las alertas se disparan cuando el retraso medio en una ventana supera un umbral; sin una **referencia temporal correcta** (ventana actual vs. histórico), las alertas no serían interpretables.
+- **Limitación actual**: El modelo de anomalías (K-Means) usa `avg_delay_min` y `vehicle_count` por ventana, pero **no incluye de forma explícita** la hora del día o el día de la semana como características. Por tanto, un retraso “normal” en hora punta podría mezclarse con anomalías si no se segmenta por franja horaria.
+
+### Variables que podrían afectar y no estamos teniendo en cuenta
+
+Estas variables influyen en la realidad sobre retrasos y calidad del servicio, pero en el estado actual del proyecto **no se usan como entrada** (o solo de forma parcial):
+
+| Variable | Efecto típico | Estado en Sentinel360 |
+|----------|----------------|----------------------|
+| **Meteorología** | Lluvia, nieve, viento → más retrasos y menor velocidad. | OpenWeather se menciona en la arquitectura (NiFi/API), pero **no se integra de forma sistemática** en el modelo de retrasos ni en las alertas. |
+| **Franja horaria / día de la semana** | Hora punta vs. valle; lunes vs. domingo. | Se pueden hacer consultas en Hive por hora/día, pero el **modelo de anomalías** y las ventanas **no normalizan** por “retraso esperado en esta franja”. |
+| **Tipo de vehículo o ruta** | Autobús urbano vs. largo recorrido; tipo de ruta (urbana, interurbana). | No hay dimensión **tipo_vehiculo** o **tipo_ruta** en los agregados; el análisis es por `warehouse_id` / ventana. |
+| **Carga / ocupación** | Más pasajeros o carga → más tiempo en paradas y más variabilidad. | No hay dato de **carga u ocupación** en los eventos GPS ni en los maestros. |
+| **Obras, eventos, incidencias** | Accidentes, cortes, conciertos, manifestaciones. | No hay fuente de **eventos externos** ni banderas de “incidencia conocida” para filtrar o explicar picos. |
+| **Mantenimiento / estado del vehículo** | Vehículo en revisión o con avería. | No hay campo **estado_mantenimiento** ni integración con sistemas de taller. |
+| **Calendario (festivos, vacaciones)** | Menor demanda o patrones distintos. | No se usa **calendario laboral/festivos** para ajustar umbrales o interpretar anomalías. |
+
+Incorporar estas variables requeriría: (1) nuevas fuentes de datos o campos en los eventos, (2) enriquecimiento en el pipeline (p. ej. unir con clima o calendario), y (3) modelos que usen esas características (p. ej. retraso esperado por ruta + hora + clima). La documentación de la API OpenWeather y de los flujos NiFi está en `ingest/nifi/` para una futura integración de clima.
+
+---
+
 ## Resumen rápido de casos de uso
 
 | Caso de uso | Actor principal | Objetivo | Componentes clave |
