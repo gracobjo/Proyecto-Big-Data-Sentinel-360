@@ -29,12 +29,14 @@ HDFS_MODELS_PATH = f"{HDFS_PROCESSED_PATH}/models"
 HDFS_WAREHOUSES_PATH = f"{HDFS_NAMENODE}{HDFS_BASE}/warehouses"
 HDFS_ROUTES_PATH = f"{HDFS_NAMENODE}{HDFS_BASE}/routes"
 
-# Kafka (broker en master)
+# Kafka (broker en master). Topics del proyecto Sentinel360:
+#   raw-data     = entrada principal (NiFi: GPS + OpenWeather)
+#   filtered-data = datos filtrados (consumo downstream)
 KAFKA_BOOTSTRAP_SERVERS = f"{MASTER_IP}:9092"
 KAFKA_TOPIC_RAW = "raw-data"
 KAFKA_TOPIC_FILTERED = "filtered-data"
-KAFKA_TOPIC_GPS_EVENTS = "gps-events"   # simulador y consumidores de demo
-KAFKA_TOPIC_ALERTS = "alerts"           # alertas de anomalías (batch y streaming)
+KAFKA_TOPIC_GPS_EVENTS = "gps-events"   # opcional: simulador y consumidores de demo
+KAFKA_TOPIC_ALERTS = "alerts"           # opcional: alertas de anomalías (batch y streaming)
 
 # Spark / YARN (modo distribuido)
 SPARK_MASTER = "yarn"

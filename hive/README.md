@@ -21,20 +21,31 @@ Análisis detallado: **`docs/ANALISIS_HIVE.md`**.
 
 ## Orden de ejecución
 
+**Dónde buscar**: `docs/HIVE_SENTINEL360.md` (resumen, comandos y enlaces a todo lo relacionado con Hive).
+
+**Crear base y tablas** (recomendado: un solo comando desde la raíz del proyecto):
+
 ```bash
-# 1. Arrancar metastore (una vez)
-nohup hive --service metastore > logs/hive-metastore.log 2>&1 &
+./scripts/crear_tablas_hive.sh
+```
 
-# 2. Crear tablas (rutas HDFS deben existir; datos maestros vía ingest_from_local.sh)
-hive -f hive/schema/01_warehouses.sql
-hive -f hive/schema/02_routes.sql
-hive -f hive/schema/03_events_raw.sql
-hive -f hive/schema/04_aggregated_reporting.sql
-hive -f hive/schema/05_reporte_diario.sql
+O a mano con Beeline (más fiable que `hive -f` si usas HiveServer2):
 
-# 3. Consultas de ejemplo
-hive -f hive/queries/example_report.sql
-hive -f hive/queries/reporte_diario.sql   # rellena reporte_diario_retrasos
+```bash
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/01_warehouses.sql
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/02_routes.sql
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/03_events_raw.sql
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/04_aggregated_reporting.sql
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/schema/05_reporte_diario.sql
+```
+
+Antes: metastore y HiveServer2 en marcha (p. ej. `./scripts/start_servicios.sh`). Después, poblar datos maestros: `./scripts/ingest_from_local.sh`. Comprobar: `./scripts/verificar_tablas_hive.sh`.
+
+**Consultas de ejemplo**:
+
+```bash
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/queries/example_report.sql
+beeline -u "jdbc:hive2://localhost:10000" -n hadoop -f hive/queries/reporte_diario.sql
 ```
 
 ## Integración con Spark
