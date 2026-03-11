@@ -1,0 +1,16 @@
+# Provisioning de dashboards Sentinel360
+# Los JSON en ../dashboards/ se cargan automáticamente al arrancar Grafana.
+
+apiVersion: 1
+
+providers:
+  - name: 'Sentinel360'
+    orgId: 1
+    folder: 'Sentinel360'
+    folderUid: 'sentinel360'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/sentinel360

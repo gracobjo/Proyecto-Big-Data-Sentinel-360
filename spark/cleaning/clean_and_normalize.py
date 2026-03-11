@@ -36,12 +36,39 @@ def get_spark_session():
 
 
 def main(raw_path: str = None, output_path: str = None) -> None:
-    raw_path = raw_path or HDFS_RAW_PATH
+    raw_path = (raw_path or HDFS_RAW_PATH).rstrip("/")
     output_path = output_path or HDFS_CLEANED_PATH
     spark = get_spark_session()
-    df = spark.read.option("header", "true").option("inferSchema", "true").csv(raw_path)
+
+    # Leer solo datos de eventos GPS: primero gps_events*.csv; si no hay, *.json (evita mezclar routes/warehouses y JSON como CSV)
+    df = None
+    try:
+        df = spark.read.option("header", "true").option("inferSchema", "true").csv(f"{raw_path}/gps_events*.csv")
+        if df.rdd.isEmpty():
+            df = None
+    except Exception:
+        df = None
+    if df is None:
+        try:
+            df = spark.read.json(f"{raw_path}/gps_events*.json")
+        except Exception:
+            df = spark.read.json(f"{raw_path}/*.json")
+    if df.rdd.isEmpty():
+        raise ValueError(
+            f"No se encontraron datos de eventos en {raw_path}. "
+            "Añade gps_events.csv o gps_events.json en raw."
+        )
+
     for c in df.columns:
         df = df.withColumnRenamed(c, c.lower().replace(" ", "_"))
+    # Solo columnas esperadas en eventos GPS (evitar error si hay otros CSVs mezclados)
+    required = ["speed", "warehouse_id"]
+    if not all(c in df.columns for c in required):
+        raise ValueError(
+            f"El dataset no tiene las columnas esperadas {required}. "
+            f"Columnas encontradas: {df.columns}. "
+            "Asegúrate de que raw contiene gps_events.csv o gps_events.json."
+        )
     df = df.fillna(0.0, subset=["speed"]).fillna("UNKNOWN", subset=["warehouse_id"])
     df = (
         df.dropDuplicates(["event_id"])

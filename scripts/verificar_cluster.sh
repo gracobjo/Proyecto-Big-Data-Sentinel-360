@@ -81,7 +81,7 @@ for d in /opt/nifi/nifi-2.7.2 /opt/nifi/nifi* /usr/local/nifi "$HOME/nifi" "$HOM
 done
 if [ -n "$NIFI_HOME" ] && [ -x "$NIFI_HOME/bin/nifi.sh" ]; then
   ok "NiFi encontrado: $NIFI_HOME"
-  "$NIFI_HOME/bin/nifi.sh" status 2>/dev/null | grep -q "Running" && ok "NiFi en marcha (UI: http://localhost:8080/nifi)" || warn "NiFi no está corriendo: $NIFI_HOME/bin/nifi.sh start"
+  ("$NIFI_HOME/bin/nifi.sh" status 2>/dev/null | grep -qiE "Running|Status: UP|UP") && ok "NiFi en marcha (UI: http://localhost:8080/nifi)" || warn "NiFi no está corriendo: $NIFI_HOME/bin/nifi.sh start"
 else
   warn "NiFi no encontrado. Ingesta alternativa: ./scripts/ingest_from_local.sh. Ver ingest/nifi/README.md"
 fi

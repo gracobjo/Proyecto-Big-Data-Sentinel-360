@@ -8,6 +8,16 @@ Este documento describe cómo:
 
 ---
 
+### Implementación automatizada (provisioning)
+
+El proyecto incluye configuración lista para usar:
+
+- **Docker**: `grafana/provisioning/` y `grafana/dashboards/` se montan automáticamente al usar `docker compose up grafana` (ver `docker/docker-compose.yml`). El datasource MariaDB y el dashboard de KPIs se cargan al arrancar.
+- **Instalación nativa**: ejecutar `sudo ./scripts/install_grafana.sh` (opcionalmente `MARIA_DB_HOST=192.168.99.10` según tu IP de MariaDB).
+- **Estructura**: ver `grafana/README.md` para detalles.
+
+---
+
 ### 1. Instalación básica de Grafana (Ubuntu)
 
 En el nodo donde quieras ejecutar Grafana:

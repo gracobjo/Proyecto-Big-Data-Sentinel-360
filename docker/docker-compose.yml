@@ -33,8 +33,22 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      MARIA_DB_HOST: mariadb
+      MARIA_DB_PORT: "3306"
+      MARIA_DB_USER: sentinel
+      MARIA_DB_PASSWORD: sentinel_password
+      MARIA_DB_NAME: sentinel360_analytics
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ../grafana/dashboards:/var/lib/grafana/dashboards/sentinel360
+    depends_on:
+      - mariadb
 
   tools:
     build:

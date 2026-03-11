@@ -1,0 +1,21 @@
+# Datasources provisionados para Sentinel360
+# Docker: variables de entorno se pasan desde docker-compose (MARIA_DB_HOST=mariadb).
+# Instalación nativa: el script install_grafana.sh genera una versión con el host correcto.
+
+apiVersion: 1
+
+datasources:
+  - name: Sentinel360 MariaDB
+    type: mysql
+    uid: sentinel360-mariadb
+    access: proxy
+    url: ${MARIA_DB_HOST}:${MARIA_DB_PORT}
+    user: ${MARIA_DB_USER}
+    database: ${MARIA_DB_NAME}
+    jsonData:
+      maxOpenConns: 10
+      maxIdleConns: 2
+    secureJsonData:
+      password: ${MARIA_DB_PASSWORD}
+    isDefault: true
+    editable: false

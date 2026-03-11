@@ -213,13 +213,18 @@ def page_entorno_visual():
     )
 
     st.subheader("Documentación de dashboards")
-    st.markdown(
-        """
-        - `docs/PRESENTACION_ENTORNO_VISUAL.md`
-        - `docs/SUPERSET_DASHBOARDS.md`
-        - `docs/GRAFANA_DASHBOARDS.md`
-        """
-    )
+    docs_dir = PROJECT_ROOT / "docs"
+    doc_files = [
+        ("PRESENTACION_ENTORNO_VISUAL.md", "Presentación del entorno visual"),
+        ("SUPERSET_DASHBOARDS.md", "Dashboards Superset"),
+        ("GRAFANA_DASHBOARDS.md", "Dashboards Grafana"),
+    ]
+    for filename, desc in doc_files:
+        doc_path = docs_dir / filename
+        if doc_path.exists():
+            st.markdown(f"- **{desc}**: `docs/{filename}`")
+        else:
+            st.markdown(f"- **{desc}**: `docs/{filename}` *(no encontrado)*")
 
     st.info(
         "Para la demo, arranca Superset/Grafana como tengas configurado en tu entorno y "

@@ -33,7 +33,9 @@ Sentinel360/   (o ProyectoBigData/ según nombre de la carpeta local)
 ├── hdfs/                # Rutas y scripts HDFS
 ├── data/                # Datos de ejemplo y logs simulados
 ├── docs/                # Documentación, diagramas e infografías
-├── docker/              # Ficheros de apoyo para despliegues dockerizados
+├── docker/              # MariaDB, Superset, Grafana (docker compose)
+├── grafana/             # Provisioning Grafana (datasources, dashboards KPIs)
+├── web/                 # Interfaz presentación Streamlit (panel KDD)
 ├── unnamed.png          # Infografía general de la arquitectura Sentinel360
 └── scripts/             # Utilidades y lanzamiento
 ```
@@ -77,6 +79,14 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 
 ---
 
+## Interfaz web y dashboards
+
+- **Streamlit** (panel de presentación KDD): `pip install streamlit pandas && streamlit run web/presentacion_sentinel360_app.py` → http://localhost:8501
+- **Grafana** (KPIs): con Docker: `cd docker && docker compose up -d mariadb grafana` → http://localhost:3000 (admin/admin). Dashboards en carpeta *Sentinel360*.
+- **Estado de implementación**: ver `docs/ESTADO_IMPLEMENTACION.md`.
+
+---
+
 ## Documentación para desarrolladores
 
 | Documento | Contenido |
@@ -96,6 +106,8 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [data/sample/README.md](data/sample/README.md) | **Origen de los datos**: GPS, rutas (`routes.csv`), almacenes (`warehouses.csv`); de dónde salen y cómo se usan |
 | [docs/FASE_III_STREAMING.md](docs/FASE_III_STREAMING.md) | Fase III: streaming (ventanas 15 min), escritura en Hive y MongoDB |
 | [docs/PRESENTACION_INTERFAZ_WEB.md](docs/PRESENTACION_INTERFAZ_WEB.md) | Interfaz web de presentación (Streamlit) para recorrer el ciclo KDD y lanzar scripts |
+| [docs/GRAFANA_DASHBOARDS.md](docs/GRAFANA_DASHBOARDS.md) | Grafana: dashboards de KPIs, provisioning MariaDB (Docker + nativo) |
+| [docs/SUPERSET_DASHBOARDS.md](docs/SUPERSET_DASHBOARDS.md) | Dashboards analíticos en Superset |
 | [docs/FUNCIONALIDADES_RECIENTES.md](docs/FUNCIONALIDADES_RECIENTES.md) | Grafos, visualización, verificación Hive y correcciones aplicadas |
 | [docs/VISUALIZAR_GRAFOS.md](docs/VISUALIZAR_GRAFOS.md) | Cómo ver los Parquet y generar grafo.png (red de almacenes y rutas) |
 | [docs/POBLAR_TABLAS_HIVE.md](docs/POBLAR_TABLAS_HIVE.md) | Cómo se pueblan las tablas de `transport` y script de verificación |
@@ -103,5 +115,6 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/CASOS_DE_USO.md](docs/CASOS_DE_USO.md) | Casos de uso de Sentinel360 (operador, planificación, anomalías, simulación) |
 | [docs/ARQUITECTURA_SENTINEL360.md](docs/ARQUITECTURA_SENTINEL360.md) | Visión arquitectónica de alto nivel (clúster, KDD, stack Apache, almacenamiento) |
 | [docs/AIRFLOW_DAGS.md](docs/AIRFLOW_DAGS.md) | Cómo integrar y ejecutar los DAGs de Sentinel360 en Apache Airflow |
+| [docs/ESTADO_IMPLEMENTACION.md](docs/ESTADO_IMPLEMENTACION.md) | Estado actual de implementación de todas las fases KDD |
 
 **Configuración central de Sentinel360**: IPs, rutas HDFS, Kafka (incl. temas `gps-events` y `alerts`), Hive, MongoDB (incl. colección `anomalies`) y MariaDB (`sentinel360_analytics`) están en **`config.py`**; los scripts Python y jobs Spark importan las variables que necesitan. Para sobrescribir en un entorno concreto puedes usar variables de entorno (p. ej. `MONGO_URI`, `MARIA_DB_URI`).

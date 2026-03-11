@@ -86,3 +86,34 @@ Documentación de las funcionalidades implementadas en las últimas fases: job d
 ---
 
 Consultar **`docs/HOWTO_EJECUCION.md`** para el flujo completo de ejecución por supuestos.
+
+---
+
+## 7. Interfaz web de presentación (Streamlit)
+
+- **Script**: `web/presentacion_sentinel360_app.py`
+- **Qué hace**: Panel interactivo con 6 pestañas según el ciclo KDD:
+  - Arranque de servicios del clúster (`start_servicios.sh`)
+  - Fase I – Ingesta (setup HDFS, preparar NiFi, muestra `gps_events.csv`)
+  - Fase II – Limpieza y enriquecimiento (jobs Spark clean + enrich, mapa de almacenes)
+  - Fase II – Grafos (transport_graph.py, ver_grafos_resultados.py, muestra grafo.png)
+  - Fase III – Streaming y anomalías (delays_windowed.py, anomaly_detection.py)
+  - Entorno visual (enlaces a docs Superset/Grafana)
+- **Ejecución**:
+  ```bash
+  pip install streamlit pandas
+  streamlit run web/presentacion_sentinel360_app.py
+  ```
+- **Documentación**: `docs/PRESENTACION_INTERFAZ_WEB.md`, `web/requirements.txt`.
+
+---
+
+## 8. Grafana – Dashboards de monitorización
+
+- **Ubicación**: `grafana/` (provisioning + dashboards JSON)
+- **Qué incluye**:
+  - Datasource MariaDB provisionado (`sentinel360_analytics`)
+  - Dashboard **Sentinel360 – KPIs por ruta y almacén**: retraso medio por almacén (barras), series temporales, tabla de KPIs
+- **Docker**: `docker compose up -d mariadb grafana` (puerto 3000)
+- **Instalación nativa**: `sudo MARIA_DB_HOST=192.168.99.10 ./scripts/install_grafana.sh`
+- **Documentación**: `docs/GRAFANA_DASHBOARDS.md`, `grafana/README.md`.

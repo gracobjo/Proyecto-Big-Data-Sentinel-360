@@ -169,17 +169,24 @@ fi
 echo ""
 
 # --- 6. Hive (metastore + opcional hiveserver2) ---
+# Hive Metastore necesita MySQL/MariaDB en 3306; si no acepta conexiones, falla con "Connection refused"
 if [ -d "$HIVE_HOME" ] && [ -x "$HIVE_HOME/bin/hive" ]; then
   export PATH="$HIVE_HOME/bin:$PATH"
   if pgrep -f "HiveMetaStore" >/dev/null 2>&1; then
     log_ok "Hive Metastore ya está en marcha"
   else
-    nohup hive --service metastore >> "$PROJECT_ROOT/logs/hive-metastore.log" 2>&1 &
-    sleep 3
+    _mysql_listen() { command -v nc >/dev/null 2>&1 && nc -z -w2 localhost 3306 2>/dev/null; }
+    if ! _mysql_listen; then
+      log_warn "MySQL/MariaDB no acepta conexiones en localhost:3306. Arrancar antes: sudo $LAMPP_DIR/lampp startmysql  o  sudo systemctl start mariadb"
+      log_warn "Omitiendo Hive Metastore (arrancar manualmente cuando MySQL esté listo)."
+    else
+      nohup hive --service metastore >> "$PROJECT_ROOT/logs/hive-metastore.log" 2>&1 &
+      sleep 3
     if pgrep -f "HiveMetaStore" >/dev/null 2>&1; then
       log_ok "Hive Metastore arrancado (logs: logs/hive-metastore.log)"
     else
       log_warn "Hive Metastore no arrancó. Comprobar: tail -20 logs/hive-metastore.log"
+    fi
     fi
   fi
   if pgrep -f "HiveServer2" >/dev/null 2>&1; then

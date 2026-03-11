@@ -35,7 +35,7 @@ En NiFi, usa estas variables o configúralas en los procesadores:
 | 1 | **GetFile** | Lee archivos de una carpeta. Directorio: ruta a `data/sample` o a una carpeta que contenga `gps_events.csv` / `*.json`. Mantener archivos después de leer (opcional) o mover a `./processed`. |
 | 2 | **SplitText** (opcional) | Si quieres un evento por línea (JSON línea a línea), usar SplitText por línea; para CSV puede ir directo o con SplitText por líneas. |
 | 3 | **PublishKafkaRecord** o **PublishKafka** (2.6) | Envía cada flowfile al tema Kafka. Kafka Brokers: `192.168.99.10:9092`, Topic: `raw-data`. Para JSON/CSV como valor: Key (vacío o atributo), Value = contenido del flowfile. |
-| 4 | **PutHDFS** | Escribe en HDFS. Directory: `/user/hadoop/proyecto/raw`. Conflict Resolution: replace o ignore. Configurar HDFS con NameNode `hdfs://192.168.99.10:9000` (o usar Controller Service HDFS con esa URL). |
+| 4 | **PutHDFS** | Escribe en HDFS. Directory: `/user/hadoop/proyecto/raw`. Conflict Resolution Strategy: replace o ignore. Configurar HDFS con NameNode `hdfs://192.168.99.10:9000` (o usar Controller Service HDFS con esa URL). |
 
 **Conexiones**: GetFile → PublishKafka; GetFile → PutHDFS (o GetFile → SplitText → PublishKafka y PutHDFS según quieras un evento por mensaje Kafka).
 

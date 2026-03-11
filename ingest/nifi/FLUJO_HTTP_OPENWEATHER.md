@@ -44,7 +44,7 @@ Consumir datos de una API pública (OpenWeather) y publicar en Kafka (tema **raw
 | **GenerateFlowFile** | GenerateFlowFile | **Schedule**: 5 min (300 sec). **Batch Size**: 1. **File Size**: 0. **Custom Text**: (vacío). |
 | **InvokeHTTP**    | InvokeHTTP      | **HTTP Method**: GET. **URL**: `https://api.openweathermap.org/data/2.5/weather?lat=40.42&lon=-3.70&appid=${openweather_api_key}&units=metric`. **Content-type**: (vacío). Añadir **Parameter Context** al grupo con parámetro `openweather_api_key` (sensitive). |
 | **PublishKafka**  | PublishKafka    | **Kafka Connection Service**: crear/enlazar Kafka3 con bootstrap `192.168.99.10:9092`. **Topic Name**: `raw-data`. **Publish Strategy**: USE_VALUE (cuerpo del flowfile = valor del mensaje). |
-| **PutHDFS**       | PutHDFS         | **Directory**: `/user/hadoop/proyecto/raw`. **Hadoop Configuration** o **HDFS Connection** con NameNode `hdfs://192.168.99.10:9000`. **Conflict Resolution**: replace. |
+| **PutHDFS**       | PutHDFS         | **Directory**: `/user/hadoop/proyecto/raw`. **Hadoop Configuration** o **HDFS Connection** con NameNode `hdfs://192.168.99.10:9000`. **Conflict Resolution Strategy**: replace. |
 
 ### 3. Conexiones
 
