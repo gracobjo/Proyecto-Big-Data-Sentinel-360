@@ -238,6 +238,18 @@ def page_fase_i_ingesta():
         "Muestra de `ingest/gps_transport_flow_importable.json` (definición flujo NiFi)",
     )
 
+    nifi_png = PROJECT_ROOT / "ingest" / "capturas" / "grupoProcesadores.png"
+    if nifi_png.exists():
+        st.subheader("Vista del grupo de procesadores NiFi")
+        st.image(
+            str(nifi_png),
+            caption=(
+                "Grupo de procesadores NiFi para la Fase I: "
+                "GetFile → UpdateAttribute → PutHDFS + SplitText → "
+                "EvaluateJsonPath → RouteOnAttribute → PublishKafka raw/filtered"
+            ),
+        )
+
     st.subheader("Comandos de esta fase")
     st.code(
         "./scripts/setup_hdfs.sh\n"
