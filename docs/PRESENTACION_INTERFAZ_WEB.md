@@ -95,7 +95,10 @@ Así, quien use la interfaz puede leer directamente en pantalla **qué está pas
 - **Qué muestra**:
   - Descripción de lo que hace cada script:
     - `delays_windowed.py`: ventanas de retrasos, escritura en Hive + MongoDB, alertas en Kafka (`alerts`).
-    - `anomaly_detection.py`: K-Means sobre agregados, marcaje de anomalías en MongoDB + alerts.
+    - `anomaly_detection.py`: aplica un modelo K-Means de Spark ML sobre los agregados de retrasos
+      (`avg_delay_min`, `vehicle_count`). Marca como *anómalos* los registros que caen en el
+      **cluster con mayor retraso medio** y los persiste en MongoDB (`transport.anomalies`),
+      además de publicar alertas en Kafka (`alerts`).
   - La salida completa de cada ejecución.
 - **Objetivo en la demo**: enseñar la parte de **monitorización en tiempo casi real** y la **detección de anomalías** sobre los agregados.
 

@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import base64
 from pathlib import Path
 
 import pandas as pd
@@ -561,6 +562,25 @@ def page_fase_iii_streaming_anomalias():
 def page_entorno_visual():
     st.header("5 · Entorno visual (Superset / Grafana)")
     render_top_nav("5 · Entorno visual (Superset / Grafana)")
+
+    img_candidates = [
+        PROJECT_ROOT / "sentinel360v2.png",
+        PROJECT_ROOT / "Sentinel360.png",
+        PROJECT_ROOT.parent / "sentinel360v2.png",
+    ]
+    img_path = next((p for p in img_candidates if p.exists()), None)
+    if img_path is not None:
+        st.subheader("Arquitectura Sentinel360")
+        st.image(
+            str(img_path),
+            caption="Arquitectura Sentinel360 – vista general",
+        )
+        if st.button(
+            "Comenzar recorrido KDD desde esta arquitectura",
+            key="hero_nav_5_to_0",
+        ):
+            navigate_to("0 · Arranque de servicios")
+
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD (Presentación de resultados)** – última etapa del ciclo.
@@ -604,6 +624,50 @@ def page_entorno_visual():
         "navega a los dashboards definidos en la documentación."
     )
 
+    st.subheader("Material de presentación")
+    pptx_candidates = [
+        PROJECT_ROOT / "Sentinel360_Proactive_Logistics_Intelligence.pptx",
+        PROJECT_ROOT.parent / "Sentinel360_Proactive_Logistics_Intelligence.pptx",
+    ]
+    pptx_path = next((p for p in pptx_candidates if p.exists()), None)
+    if pptx_path is not None:
+        try:
+            pptx_bytes = pptx_path.read_bytes()
+            st.download_button(
+                label="Descargar presentación Sentinel360 (PPTX)",
+                data=pptx_bytes,
+                file_name=pptx_path.name,
+                mime=(
+                    "application/"
+                    "vnd.openxmlformats-officedocument.presentationml.presentation"
+                ),
+            )
+        except Exception as exc:  # pragma: no cover
+            st.warning(f"No se ha podido preparar la descarga de la presentación: {exc}")
+    else:
+        st.info(
+            "No se ha encontrado `Sentinel360_Proactive_Logistics_Intelligence.pptx` "
+            "en el proyecto ni en el directorio padre."
+        )
+
+    pdf_candidates = [
+        PROJECT_ROOT / "Sentinel360_Proactive_Logistics_Intelligence.pdf",
+        PROJECT_ROOT.parent / "Sentinel360_Proactive_Logistics_Intelligence.pdf",
+    ]
+    pdf_path = next((p for p in pdf_candidates if p.exists()), None)
+    if pdf_path is not None:
+        st.markdown("#### Descargar versión PDF de la presentación")
+        try:
+            pdf_bytes = pdf_path.read_bytes()
+            st.download_button(
+                label="Descargar presentación Sentinel360 (PDF)",
+                data=pdf_bytes,
+                file_name=pdf_path.name,
+                mime="application/pdf",
+            )
+        except Exception as exc:  # pragma: no cover
+            st.warning(f"No se ha podido preparar la descarga en PDF: {exc}")
+
 
 def main():
     st.set_page_config(
@@ -612,6 +676,11 @@ def main():
     )
     st.sidebar.title("Sentinel360 – Demo KDD")
     st.sidebar.markdown("Selecciona la etapa del ciclo KDD:")
+    st.sidebar.markdown(
+        "[Repositorio en GitHub]("
+        "https://github.com/gracobjo/Proyecto-Big-Data-Sentinel-360"
+        ")"
+    )
 
     pages = {
         "0 · Arranque de servicios": page_arranque_servicios,
