@@ -20,6 +20,132 @@ Monitorización de red de transporte global siguiendo el ciclo **KDD** (Knowledg
 | Orquestación  | Airflow 2.10                  | DAG re-entrenamiento grafos y limpieza     |
 | Recursos      | YARN                          | Ejecución de jobs Spark                     |
 
+## Arquitectura de referencia – Sentinel360
+
+### 1. Marco estratégico y propósito del sistema
+
+Sentinel360 se plantea como una solución de **misión crítica** para la visibilidad integral de redes de transporte. El objetivo es pasar de un monitoreo **reactivo** (ver qué ha pasado cuando ya es tarde) a un **descubrimiento de conocimiento proactivo** apoyado en el ciclo **KDD (Knowledge Discovery in Databases)**.
+
+El sistema transforma:
+
+- Telemetría **GPS** masiva (eventos de posición de vehículos).
+- Datos de contexto de la API de **OpenWeather**.
+
+en **inteligencia accionable**: detección de cuellos de botella, rutas ineficientes, comportamientos anómalos y KPIs de retrasos.
+
+El uso del **stack Apache** (NiFi, Kafka, Spark, Hive, Airflow) evita la fragmentación de datos, integrando flujos heterogéneos en una plataforma unificada. El dato crudo se convierte en un activo que permite **modelar la red de transporte como una entidad dinámica y observable**.
+
+---
+
+### 2. Infraestructura del clúster y topología de red
+
+La arquitectura se despliega sobre un **clúster multi‑nodo** que separa claramente responsabilidades:
+
+| Nodo              | IP             | Servicios clave                                                |
+|-------------------|----------------|----------------------------------------------------------------|
+| `hadoop` (master) | `192.168.99.10`| NameNode, ResourceManager, Kafka (KRaft), NiFi, Hive, MariaDB |
+| `nodo1`           | `192.168.99.12`| DataNode, NodeManager                                          |
+| `nodo2`           | `192.168.99.14`| DataNode, NodeManager                                          |
+
+Toda la configuración se centraliza en **`config.py`**, que actúa como **Single Source of Truth (SSOT)**:
+
+- IPs y puertos de servicios (HDFS, YARN, Kafka, Hive, MongoDB, MariaDB).
+- Rutas HDFS base del proyecto.
+- Nombres de topics Kafka (`raw-data`, `filtered-data`, `alerts`).
+- Rutas de checkpoints de streaming y de salida de cada fase.
+
+Cambios de infraestructura (p. ej. migrar de una IP a otra o cambiar rutas HDFS) se gestionan desde este punto, propagándose automáticamente a jobs Spark, scripts de ingesta y DAGs de Airflow.
+
+---
+
+### 3. El ciclo KDD en Sentinel360
+
+Sentinel360 implementa el ciclo **KDD** extremo a extremo, desde la ingesta `raw` hasta modelos de grafos y anomalías:
+
+1. **Fase I – Ingesta y selección**  
+   - **Herramientas**: Apache NiFi 2.x, Apache Kafka 3.x (KRaft), HDFS.  
+   - NiFi ingesta logs GPS desde `/home/hadoop/data/gps_logs` y publica en Kafka (`raw-data`, `filtered-data`), además de escribir una copia **raw** en HDFS (`/user/hadoop/proyecto/raw`).  
+   - Flujos NiFi importables y documentados en `ingest/` y `ingest/nifi/`.
+
+2. **Fase II – Preprocesamiento, limpieza y enriquecimiento**  
+   - **Herramientas**: Apache Spark 3.5, Apache Hive.  
+   - Jobs Spark principales:
+     - `spark/cleaning/clean_and_normalize.py`: limpia y normaliza eventos `raw` → `procesado/cleaned`.
+     - `spark/cleaning/enrich_with_hive.py`: enriquece con maestros de Hive (`warehouses`, `routes`) → `procesado/enriched`.
+     - `spark/graph/transport_graph.py`: genera el grafo almacenes–rutas con GraphFrames → `procesado/graph`.
+   - Las tablas Hive (`01_warehouses.sql`, `02_routes.sql`, `03_events_raw.sql`, `04_aggregated_reporting.sql`) apuntan con `LOCATION` a estas rutas Parquet.
+
+3. **Fase III – Streaming de retrasos y anomalías**  
+   - **Herramientas**: Spark Structured Streaming, Kafka, Hive, MongoDB.  
+   - `spark/streaming/delays_windowed.py`:
+     - Lee de `raw-data` o de ficheros HDFS (`file` mode).
+     - Calcula métricas de retrasos en ventanas de 15 minutos.
+     - Escribe en Hive (`aggregated_delays`) y en MongoDB (`transport.aggregated_delays`).
+     - Publica alertas en el topic Kafka `alerts`.  
+   - `spark/ml/anomaly_detection.py`:
+     - Aplica K‑Means sobre los agregados de retrasos.
+     - Marca anomalías en MongoDB (`transport.anomalies`) y puede publicar nuevas alertas en Kafka.
+
+4. **Fase IV – Orquestación y recarga**  
+   - **Herramientas**: Apache Airflow 2.10.  
+   - DAGs en `airflow/` coordinan:
+     - Limpieza → enriquecimiento → grafo → carga de agregados → anomalías.
+     - Cargas de KPIs hacia MariaDB (`sentinel360_analytics`) para dashboards en Superset/Grafana.
+
+El repositorio `raw` en HDFS (`/user/hadoop/proyecto/raw`) actúa como **copia inmutable**, permitiendo re‑procesar datos si cambian reglas de negocio o algoritmos sin perder el histórico original.
+
+---
+
+### 4. Arquitectura de almacenamiento y modelado
+
+Sentinel360 aplica una estrategia de **almacenamiento políglota**:
+
+- **HDFS – capa física de datos**
+  - `/user/hadoop/proyecto/raw/`: datos crudos.
+  - `/user/hadoop/proyecto/procesado/cleaned/`: datos limpios.
+  - `/user/hadoop/proyecto/procesado/enriched/`: datos enriquecidos con maestros.
+  - `/user/hadoop/proyecto/procesado/graph/`: resultados de grafos.
+  - Rutas de checkpoints de streaming definidas en `config.py`.
+
+- **Hive – capa analítica**
+  - Tablas declaradas en `hive/schema/` (`warehouses`, `routes`, `events_raw`, `aggregated_delays`, etc.) que apuntan a rutas Parquet en `/procesado/`.
+  - Permite consultar en SQL lo que Spark genera en batch/streaming.
+
+- **MongoDB – capa operativa / near‑real time**
+  - Base de datos `transport` con colecciones:
+    - `vehicle_state`: estado más reciente de cada vehículo.
+    - `aggregated_delays`: agregados de retrasos por ventana.
+    - `anomalies`: anomalías detectadas por el modelo.  
+  - Se utiliza para dashboards y servicios que requieren lecturas/escrituras de baja latencia.
+
+---
+
+### 5. Orquestación y operación del pipeline
+
+La operación del sistema se apoya en scripts y en Airflow:
+
+1. **Inicialización y HDFS**  
+   - `./scripts/setup_hdfs.sh`: crea la estructura de directorios en HDFS según `config.py`.  
+   - `./scripts/crear_tablas_hive.sh`: ejecuta los DDL de `hive/schema/`.
+
+2. **Ingesta de datos maestros y ejemplo**  
+   - Scripts en `scripts/` y `ingest/` copian `warehouses.csv`, `routes.csv` y datos GPS de ejemplo a las rutas esperadas.
+
+3. **Jobs Spark (batch + streaming)**  
+   - `./scripts/run_spark_submit.sh <script.py>` encapsula la llamada a `spark-submit` (YARN, jars de Hive, `--local` cuando hace falta).  
+   - Se usa para los módulos de limpieza, enriquecimiento, grafos, streaming de retrasos y anomalías.
+
+4. **Orquestación con Airflow**  
+   - DAGs en `airflow/` ejecutan el orden correcto de tareas y soportan re‑ejecuciones programadas.
+
+5. **Presentación y validación**  
+   - La app Streamlit (`web/presentacion_sentinel360_app.py`) actúa como panel KDD:
+     - Lanza scripts clave con un clic.
+     - Muestra logs y datos de ejemplo.
+     - Integra documentación (`docs/*.md`) y navegación entre fases para la defensa.
+
+En conjunto, la arquitectura convierte los datos de transporte aparentemente caóticos en una **red logística inteligente**, monitorizable y auditable de extremo a extremo.
+
 ## Estructura del proyecto Sentinel360
 
 ```
