@@ -615,8 +615,22 @@ def page_entorno_visual():
         """
     )
 
-    st.subheader("Documentación de dashboards")
+    st.subheader("Cómo levantar y solucionar fallos")
+    st.markdown(
+        "Guía rápida: **levantar** Superset y Grafana con Docker y **qué hacer cuando algo falla** "
+        "(error 500 en Superset, driver MySQL, conexión a MariaDB, paneles sin datos en Grafana). "
+        "Incluye los scripts `init_superset.sh`, `verificar_conexion_superset_mariadb.sh` y el flujo de datos para Grafana."
+    )
     docs_dir = PROJECT_ROOT / "docs"
+    levantar_doc = docs_dir / "DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md"
+    if levantar_doc.exists():
+        st.markdown("- **Levantar dashboards y solucionar fallos**: `docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md`")
+        with st.expander("Ver `DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md`"):
+            st.markdown(levantar_doc.read_text(encoding="utf-8"))
+    else:
+        st.markdown("- **Levantar dashboards y solucionar fallos**: `docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md` *(no encontrado)*")
+
+    st.subheader("Documentación de dashboards")
     doc_files = [
         ("PRESENTACION_ENTORNO_VISUAL.md", "Presentación del entorno visual"),
         ("SUPERSET_DASHBOARDS.md", "Dashboards Superset"),
@@ -632,8 +646,9 @@ def page_entorno_visual():
             st.markdown(f"- **{desc}**: `docs/{filename}` *(no encontrado)*")
 
     st.info(
-        "Para la demo, arranca Superset/Grafana como tengas configurado en tu entorno y "
-        "navega a los dashboards definidos en la documentación."
+        "Para la demo: `cd docker && docker compose up -d mariadb superset grafana`. "
+        "Si Superset da 500, ejecuta `./scripts/init_superset.sh`. "
+        "Detalle completo en `docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md`."
     )
 
     st.subheader("Material de presentación")

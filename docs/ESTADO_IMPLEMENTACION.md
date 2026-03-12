@@ -130,6 +130,7 @@ Revisión del proyecto según el ciclo KDD y el stack documentado. Fecha de revi
 | docs/AIRFLOW_DAGS.md | Integración DAGs en Airflow |
 | docs/GRAFANA_DASHBOARDS.md | Grafana: instalación, datasources, paneles KPIs |
 | docs/SUPERSET_DASHBOARDS.md | Dashboards Superset |
+| docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md | **Levantar Superset/Grafana (Docker)** y solucionar fallos (500, driver MySQL, conexión MariaDB, "No data") |
 | docs/PROBAR_PIPELINE.md | Cómo probar el pipeline end-to-end |
 
 ---

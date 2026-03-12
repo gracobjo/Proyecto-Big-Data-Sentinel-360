@@ -1,0 +1,15 @@
+# Superset con drivers MySQL/MariaDB: PyMySQL (URI mysql+pymysql) y mysqlclient (MySQLdb para ejecución de queries)
+# Ver: https://superset.apache.org/docs/installation/docker-builds/
+FROM apache/superset:latest
+USER root
+# Librerías de sistema para compilar mysqlclient (proporciona MySQLdb)
+RUN apt-get update && apt-get install -y --no-install-recommends default-libmysqlclient-dev build-essential \
+    && rm -rf /var/lib/apt/lists/*
+# Instalar en el venv: pymysql (conexión) y mysqlclient (algunas rutas de Superset usan MySQLdb)
+RUN /usr/local/bin/pip install --no-cache-dir --target /app/.venv/lib/python3.10/site-packages pymysql mysqlclient 2>/dev/null || true
+# Entrypoint como root para que pip install pueda escribir en /app/.venv; luego runuser superset
+COPY docker-entrypoint-superset.sh /docker-entrypoint-superset.sh
+RUN chmod +x /docker-entrypoint-superset.sh
+ENTRYPOINT ["/docker-entrypoint-superset.sh"]
+# CMD no se hereda al extender la imagen; sin esto el contenedor arranca y termina sin lanzar el servidor
+CMD ["/app/docker/entrypoints/run-server.sh"]

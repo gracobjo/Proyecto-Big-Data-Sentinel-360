@@ -6,42 +6,29 @@ Este documento explica cómo instalar **Apache Superset**, conectarlo a los dato
 
 ### 1. Instalación de Superset (vía Docker)
 
-La forma más sencilla de probar Superset en el contexto del máster es usar el **docker-compose oficial**.
+**Opción A – Docker Compose de este proyecto (recomendado)**
 
-1. Clonar el repositorio de Superset en el servidor donde quieras ejecutarlo:
+Superset ya está en `docker/docker-compose.yml`. Puerto en el host: **8089** (8088 suele usarlo YARN).
 
-   ```bash
-   git clone https://github.com/apache/superset.git
-   cd superset
-   ```
+```bash
+cd ~/Documentos/ProyectoBigData/docker
+docker compose up -d mariadb superset
+```
 
-2. Levantar Superset con Docker Compose:
+- **URL:** http://localhost:8089
+- Primera vez: crear usuario admin (ver `superset/README.md`).
+- Conexión a MariaDB desde Superset: host **`mariadb`**, puerto **3306** (misma red Docker). URI: `mysql+pymysql://sentinel:sentinel_password@mariadb:3306/sentinel360_analytics`.
 
-   ```bash
-   docker compose up
-   ```
+Guía rápida: **`superset/README.md`**.
 
-   - Esto levantará:
-     - Superset (frontend + backend).
-     - La base de datos interna de Superset (por defecto, Postgres en contenedor).
+**Opción B – Docker Compose oficial de Superset**
 
-3. Inicializar usuario administrador (si la imagen lo requiere):
+1. Clonar el repositorio de Superset: `git clone https://github.com/apache/superset.git && cd superset`
+2. Levantar: `docker compose up`
+3. Crear admin: `docker exec -it superset-app superset fab create-admin` (y luego `superset init`)
+4. URL: `http://<IP>:8088` (en ese caso configurar la conexión a MariaDB con la IP/host donde esté MariaDB).
 
-   En otra terminal, dentro del directorio `superset/`:
-
-   ```bash
-   docker exec -it superset-app superset fab create-admin
-   # Rellenar usuario, correo y contraseña
-
-   docker exec -it superset-app superset init
-   ```
-
-4. Acceder a la interfaz web:
-
-   - URL: `http://<IP_DEL_SERVIDOR>:8088`
-   - Usuario / contraseña: los que creaste en el paso anterior.
-
-> Alternativa: instalación nativa en entorno Python (virtualenv), siguiendo la guía oficial de Superset. Para el alcance del máster, Docker Compose suele ser suficiente.
+> Alternativa: instalación nativa en entorno Python (virtualenv), siguiendo la guía oficial de Superset.
 
 ---
 
@@ -55,15 +42,13 @@ Superset se conectará a la base de datos **`sentinel360_analytics`** en MariaDB
 
 2. Seleccionar tipo **MySQL** (compatible con MariaDB).
 
-3. Rellenar la URI de conexión, por ejemplo:
+3. Rellenar la conexión:
 
-   ```text
-   mysql+pymysql://sentinel:sentinel_password@192.168.99.10:3306/sentinel360_analytics
-   ```
-
-   - Ajustar:
-     - Host/IP (`192.168.99.10` o la que tenga tu LAMP/MariaDB).
-     - Usuario/contraseña según `docs/sql_entorno_visual/01_create_db_and_user.sql`.
+   - **Si Superset y MariaDB están en el mismo Docker Compose** (este proyecto): host **`mariadb`**, puerto **3306**.
+     - URI: `mysql+pymysql://sentinel:sentinel_password@mariadb:3306/sentinel360_analytics`
+   - **Si MariaDB está en el host u otra máquina:** usar su IP y puerto (en el host, MariaDB del proyecto está en **3307**).
+     - Ejemplo: `mysql+pymysql://sentinel:sentinel_password@192.168.99.10:3307/sentinel360_analytics`
+   - Usuario/contraseña según `docs/sql_entorno_visual/01_create_db_and_user.sql`.
 
 4. Probar conexión (**Test Connection**) y guardar.
 

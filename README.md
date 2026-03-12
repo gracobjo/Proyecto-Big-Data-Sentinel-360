@@ -161,6 +161,7 @@ Sentinel360/   (o ProyectoBigData/ según nombre de la carpeta local)
 ├── docs/                # Documentación, diagramas e infografías
 ├── docker/              # MariaDB, Superset, Grafana (docker compose)
 ├── grafana/             # Provisioning Grafana (datasources, dashboards KPIs)
+├── superset/            # Guía Superset (README: arranque, conexión MariaDB)
 ├── web/                 # Interfaz presentación Streamlit (panel KDD)
 ├── unnamed.png          # Infografía general de la arquitectura Sentinel360
 └── scripts/             # Utilidades y lanzamiento
@@ -208,6 +209,7 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 ## Interfaz web y dashboards
 
 - **Streamlit** (panel de presentación KDD): `pip install streamlit pandas && streamlit run web/presentacion_sentinel360_app.py` → http://localhost:8501
+- **Superset** (analítica): `cd docker && docker compose up -d mariadb superset` → http://localhost:8089 (crear admin la primera vez; ver `superset/README.md`).
 - **Grafana** (KPIs): con Docker: `cd docker && docker compose up -d mariadb grafana` → http://localhost:3000 (admin/admin). Dashboards en carpeta *Sentinel360*.
 - **Estado de implementación**: ver `docs/ESTADO_IMPLEMENTACION.md`.
 
@@ -234,6 +236,8 @@ Consultar **`docs/KDD_FASES.md`** para el detalle de cada fase del ciclo KDD.
 | [docs/PRESENTACION_INTERFAZ_WEB.md](docs/PRESENTACION_INTERFAZ_WEB.md) | Interfaz web de presentación (Streamlit) para recorrer el ciclo KDD y lanzar scripts |
 | [docs/GRAFANA_DASHBOARDS.md](docs/GRAFANA_DASHBOARDS.md) | Grafana: dashboards de KPIs, provisioning MariaDB (Docker + nativo) |
 | [docs/SUPERSET_DASHBOARDS.md](docs/SUPERSET_DASHBOARDS.md) | Dashboards analíticos en Superset |
+| [docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md](docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md) | **Levantar Superset/Grafana** (Docker), init, conexión MariaDB y **solucionar fallos** (500, driver MySQL, "No data") |
+| [superset/README.md](superset/README.md) | Arranque Superset con Docker, usuario admin, conexión MariaDB |
 | [docs/FUNCIONALIDADES_RECIENTES.md](docs/FUNCIONALIDADES_RECIENTES.md) | Grafos, visualización, verificación Hive y correcciones aplicadas |
 | [docs/VISUALIZAR_GRAFOS.md](docs/VISUALIZAR_GRAFOS.md) | Cómo ver los Parquet y generar grafo.png (red de almacenes y rutas) |
 | [docs/POBLAR_TABLAS_HIVE.md](docs/POBLAR_TABLAS_HIVE.md) | Cómo se pueblan las tablas de `transport` y script de verificación |

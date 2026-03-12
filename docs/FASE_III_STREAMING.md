@@ -58,6 +58,20 @@ Desde la raíz del proyecto:
 ./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py kafka
 ```
 
+**Si el checkpoint está corrupto** (*"Log file was malformed"* o *"failed to read correct log version"*), borra el directorio de checkpoint en HDFS y vuelve a lanzar (el streaming empezará desde cero):
+
+```bash
+hdfs dfs -rm -r /user/hadoop/proyecto/checkpoints/delays
+```
+
+**Si YARN falla** (*"Max number of executor failures reached"*, *"No space available in any of the local directories"* en nodo1/nodo2), ejecuta en **modo local** (todo en la máquina del driver, sin ejecutores YARN):
+
+```bash
+./scripts/run_spark_submit.sh --local spark/streaming/delays_windowed.py kafka
+# o con entrada desde ficheros:
+./scripts/run_spark_submit.sh --local spark/streaming/delays_windowed.py file
+```
+
 El job es de larga duración. Los logs del driver mostrarán mensajes del tipo `[batch N] Escribiendo agregados en Hive y MongoDB...` por cada micro-batch procesado.
 
 Checkpoint de Structured Streaming: `hdfs://.../user/hadoop/proyecto/checkpoints/delays`. No borrar si quieres reanudar el mismo flujo sin duplicados.

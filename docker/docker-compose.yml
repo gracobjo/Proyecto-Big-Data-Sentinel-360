@@ -11,19 +11,26 @@ services:
       MYSQL_USER: sentinel
       MYSQL_PASSWORD: sentinel_password
     ports:
-      - "3306:3306"
+      - "3307:3306"   # 3307 en host para no chocar con MySQL/MariaDB del host; Grafana usa red interna (mariadb:3306)
     volumes:
       - mariadb_data:/var/lib/mysql
+      # Asegura usuario sentinel@'%' y BD (solo se ejecuta si el volumen está vacío)
+      - ../docs/sql_entorno_visual/01_create_db_and_user.sql:/docker-entrypoint-initdb.d/01_create_db_and_user.sql:ro
 
   superset:
-    image: apache/superset:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
+    image: sentinel360-superset:local
     container_name: sentinel360-superset
     restart: unless-stopped
     ports:
-      - "8088:8088"
+      - "8089:8088"   # 8089 en host (8088 suele usarlo YARN ResourceManager)
     environment:
       SUPERSET_ENV: production
       SUPERSET_LOAD_EXAMPLES: "no"
+      # Requerido por la imagen reciente: sin esto el frontend no arranca
+      SUPERSET_SECRET_KEY: "MRl4kMoGOTsk5PotKY4W7y9ZCiRiGOH9JvZCXSC7YfwHWhrm35Eic"
     depends_on:
       - mariadb
 

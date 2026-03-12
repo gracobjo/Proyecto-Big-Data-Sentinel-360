@@ -49,7 +49,12 @@ def get_spark_session():
 def write_batch_to_hive_and_mongo(batch_df, batch_id):
     """Escribe el micro-batch en Hive (transport.aggregated_delays),
     opcionalmente en MongoDB y genera alertas de anomalías en Kafka."""
-    if batch_df.isEmpty():
+    try:
+        if batch_df.isEmpty():
+            return
+    except Exception as e:
+        # Si el SparkContext se está apagando (p. ej. fallos de ejecutores YARN), no propagar
+        print(f"[batch {batch_id}] No se pudo procesar el batch (contexto detenido?): {e}")
         return
     print(f"[batch {batch_id}] Escribiendo agregados en Hive y MongoDB...")
     # Hive: append a la tabla (esquema: window_start, window_end, warehouse_id, avg_delay_min, vehicle_count)
