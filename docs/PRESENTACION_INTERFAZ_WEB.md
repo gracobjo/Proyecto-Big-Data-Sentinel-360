@@ -30,6 +30,15 @@ Se abrirá (o te indicará) una URL local, normalmente `http://localhost:8501`.
 
 La app utiliza la barra lateral de Streamlit (`sidebar`) para ofrecer **pestañas por etapa del ciclo KDD**. Internamente, cada pestaña llama a funciones Python que a su vez ejecutan los scripts del proyecto mediante `subprocess.run`, y muestran por pantalla la salida de consola.
 
+En la propia interfaz, cada pestaña muestra siempre los mismos bloques para que sea muy **intuitivo** seguir la demo sin tener que leer mucho texto externo:
+
+- **Objetivo dentro del ciclo KDD**: qué representa esa etapa (ingesta, preprocesamiento, modelado, streaming, presentación…).
+- **Entrada**: de dónde vienen los datos en ese punto (HDFS, Kafka, Hive, MongoDB, etc.).
+- **Transformación**: qué tipo de procesamiento se aplica (limpieza, join, grafo, ML, agregación por ventanas…).
+- **Salida esperada**: qué artefactos quedan generados (rutas en HDFS, tablas Hive, colecciones MongoDB, dashboards).
+
+Así, quien use la interfaz puede leer directamente en pantalla **qué está pasando en cada paso** del pipeline, sin tener que abrir otros documentos mientras hace la demo.
+
 ### 0 · Arranque de servicios del clúster
 
 - **Función**: `page_arranque_servicios`.

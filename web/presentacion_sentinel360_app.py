@@ -9,6 +9,14 @@ import streamlit as st
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 DATA_SAMPLE_DIR = PROJECT_ROOT / "data" / "sample"
+PAGE_LABELS = [
+    "0 · Arranque de servicios",
+    "1 · Fase I – Ingesta",
+    "2 · Fase II – Limpieza y enriquecimiento",
+    "3 · Fase II – Grafos",
+    "4 · Fase III – Streaming + anomalías",
+    "5 · Entorno visual (Superset / Grafana)",
+]
 
 
 def run_command(cmd: str) -> str:
@@ -41,15 +49,122 @@ def load_sample_data():
     return gps_df, wh_df, routes_df
 
 
+def navigate_to(page_label: str) -> None:
+    """
+    Cambia de pestaña dentro de la propia app sin perder la URL.
+    """
+    st.session_state["sidebar_page"] = page_label
+
+
+def render_top_nav(current_label: str) -> None:
+    """
+    Muestra controles de navegación anterior/siguiente al inicio de cada página.
+    """
+    if current_label not in PAGE_LABELS:
+        return
+    idx = PAGE_LABELS.index(current_label)
+    cols = st.columns(3)
+    with cols[0]:
+        if idx > 0:
+            st.button(
+                f"← {PAGE_LABELS[idx - 1]}",
+                key=f"topnav_prev_{idx}",
+                on_click=navigate_to,
+                args=(PAGE_LABELS[idx - 1],),
+            )
+    with cols[2]:
+        if idx < len(PAGE_LABELS) - 1:
+            st.button(
+                f"{PAGE_LABELS[idx + 1]} →",
+                key=f"topnav_next_{idx}",
+                on_click=navigate_to,
+                args=(PAGE_LABELS[idx + 1],),
+            )
+
+
+def show_text_file_preview(path: Path, label: str, max_lines: int = 5) -> None:
+    """
+    Muestra un resumen de un fichero de texto (primeras y últimas N líneas).
+    Si el fichero tiene <= 2 * max_lines, se muestra completo.
+    """
+    if not path.exists():
+        st.info(f"No se ha encontrado `{path.relative_to(PROJECT_ROOT)}`.")
+        return
+
+    try:
+        content = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception as exc:  # pragma: no cover - interfaz interactiva
+        st.warning(f"No se ha podido leer `{path}`: {exc}")
+        return
+
+    lines = content.splitlines()
+    if len(lines) <= max_lines * 2:
+        preview = "\n".join(lines)
+    else:
+        head = "\n".join(lines[:max_lines])
+        tail = "\n".join(lines[-max_lines:])
+        preview = f"{head}\n...\n{tail}"
+
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        language = "json"
+    elif suffix in {".md", ".markdown"}:
+        language = "markdown"
+    else:
+        language = "text"
+
+    with st.expander(label):
+        st.code(preview, language=language)
+
+
 def page_arranque_servicios():
     st.header("0 · Arranque de servicios del clúster")
-    st.write(
-        "Esta pestaña lanza el script de arranque para HDFS, YARN, Kafka, MongoDB, Hive, NiFi, etc. "
-        "Debe ejecutarse en el nodo donde están instalados los servicios (p. ej. `hadoop`)."
+    render_top_nav("0 · Arranque de servicios")
+    st.markdown(
+        """
+        **Objetivo dentro del ciclo KDD**
+
+        Antes de empezar con la Fase I (ingesta) necesitamos tener levantado todo el
+        **stack de servicios** del proyecto:
+
+        - HDFS y YARN (almacenamiento distribuido y ejecución de Spark).
+        - Kafka (cola de eventos para GPS y alertas).
+        - Hive (metastore y consultas SQL sobre HDFS).
+        - MongoDB y MariaDB (capas de almacenamiento analítico).
+        - NiFi y servicios auxiliares documentados en el documento `docs/ARRANQUE_SERVICIOS.md`
+          (consultable más abajo desde esta misma pestaña).
+
+        Esta pestaña debe ejecutarse **en el nodo donde están instalados los servicios**
+        (por ejemplo, la máquina `hadoop` del clúster).
+
+        - **Entrada**: configuración ya preparada en los scripts del proyecto.
+        - **Salida**: servicios arriba y verificados para poder seguir con las fases KDD.
+        """
     )
+
+    docs_path = PROJECT_ROOT / "docs" / "ARRANQUE_SERVICIOS.md"
+    if docs_path.exists():
+        with st.expander("Ver detalle de arranque de servicios (`docs/ARRANQUE_SERVICIOS.md`)"):
+            st.markdown(docs_path.read_text(encoding="utf-8"))
+    else:
+        st.info("No se ha encontrado `docs/ARRANQUE_SERVICIOS.md` en el proyecto.")
 
     st.subheader("Comando que se va a ejecutar")
     st.code("./scripts/start_servicios.sh", language="bash")
+
+    st.markdown(
+        """
+        **¿Qué hace `start_servicios.sh`?**
+
+        - **Objetivo**: levantar de forma ordenada los servicios base del clúster
+          (HDFS, YARN, Kafka, Hive, MongoDB, MariaDB, NiFi, etc.).
+        - **Entrada**: configuración del entorno (variables como `HADOOP_HOME`, `HIVE_HOME`,
+          rutas de logs, etc.) ya definida en el propio script y en el sistema.
+        - **Salida**:
+          - Servicios arrancados si todo va bien.
+          - Ficheros de log actualizados (por ejemplo en `logs/`) para diagnosticar errores.
+        """
+    )
 
     if st.button("Arrancar servicios (start_servicios.sh)"):
         with st.spinner("Arrancando servicios..."):
@@ -57,14 +172,69 @@ def page_arranque_servicios():
         st.subheader("Salida del script")
         st.text(output)
 
+    show_text_file_preview(
+        SCRIPTS_DIR / "start_servicios.sh",
+        "Ver contenido de `scripts/start_servicios.sh`",
+    )
+
+    st.markdown("---")
+    st.markdown("**Navegación rápida**")
+    st.button(
+        "Ir a 1 · Fase I – Ingesta",
+        key="nav_0_to_1",
+        on_click=navigate_to,
+        args=("1 · Fase I – Ingesta",),
+    )
+
 
 def page_fase_i_ingesta():
     st.header("1 · Fase I – Ingesta (NiFi → Kafka + HDFS raw)")
+    render_top_nav("1 · Fase I – Ingesta")
     st.markdown(
         """
-        Aquí se preparan las rutas en HDFS y los datos de ejemplo para que NiFi pueda leer
-        los logs GPS y publicar en Kafka (`raw-data` / `filtered-data`), dejando copia `raw` en HDFS.
+        **Objetivo dentro del ciclo KDD (Fase I – Selección e ingesta de datos)**
+
+        En esta etapa preparamos las **rutas en HDFS** y los **datos de ejemplo** para que NiFi
+        pueda leer los logs GPS y publicar en Kafka (`raw-data` / `filtered-data`), dejando además
+        una copia *raw* en HDFS.
+
+        - **Entrada**:
+          - Ficheros de ejemplo en `data/sample/gps_events.*`.
+          - Configuración del flujo NiFi (`ingest/gps_transport_flow_importable.json`).
+        - **Transformación**:
+          - Copia de datos maestros y logs al HDFS del proyecto.
+          - Preparación de directorios esperados por NiFi.
+        - **Salida esperada**:
+          - Directorios `raw` poblados en HDFS.
+          - Flujo NiFi listo para leer esos datos y mandarlos a Kafka.
+
+        Más detalle de esta fase en `docs/INGEST/` y en `docs/KDD_FASES.md`.
         """
+    )
+
+    # Documentación relacionada accesible desde la propia pestaña
+    ingest_docs = [
+        ("docs/KDD_FASES.md", "Ver resumen de fases KDD (`docs/KDD_FASES.md`)"),
+        ("ingest/FLUJO_GPS_README.md", "Ver flujo de ingesta GPS (`ingest/FLUJO_GPS_README.md`)"),
+        ("ingest/nifi/FASE_I_INGESTA.md", "Detalle NiFi Fase I (`ingest/nifi/FASE_I_INGESTA.md`)"),
+        ("ingest/nifi/RESOLVER_ERRORES_FLUJO_GPS.md", "Resolver errores flujo GPS (`ingest/nifi/RESOLVER_ERRORES_FLUJO_GPS.md`)"),
+    ]
+    for rel_path, label in ingest_docs:
+        doc_path = PROJECT_ROOT / rel_path
+        if doc_path.exists():
+            with st.expander(label):
+                st.markdown(doc_path.read_text(encoding="utf-8"))
+
+    st.subheader("Vista previa de ficheros de entrada")
+    gps_json_path = PROJECT_ROOT / "data" / "sample" / "gps_events.json"
+    show_text_file_preview(
+        gps_json_path,
+        "Muestra de `data/sample/gps_events.json` (5 primeras y 5 últimas líneas si es largo)",
+    )
+    nifi_flow_path = PROJECT_ROOT / "ingest" / "gps_transport_flow_importable.json"
+    show_text_file_preview(
+        nifi_flow_path,
+        "Muestra de `ingest/gps_transport_flow_importable.json` (definición flujo NiFi)",
     )
 
     st.subheader("Comandos de esta fase")
@@ -72,6 +242,32 @@ def page_fase_i_ingesta():
         "./scripts/setup_hdfs.sh\n"
         "./scripts/preparar_ingesta_nifi.sh\n",
         language="bash",
+    )
+
+    st.markdown(
+        """
+        **¿Qué hacen estos scripts?**
+
+        - `setup_hdfs.sh`:
+          - **Objetivo**: crear en HDFS las rutas necesarias para el proyecto
+            (raw, processed, maestros, etc.).
+          - **Entrada**: estructura de rutas definida en el propio script y en `config.py`.
+          - **Salida**: directorios creados en HDFS, listos para recibir datos desde NiFi y Spark.
+        - `preparar_ingesta_nifi.sh`:
+          - **Objetivo**: copiar datos de ejemplo y dejar preparada la carpeta de entrada
+            que NiFi vigila (por ejemplo `gps_logs` en el nodo hadoop).
+          - **Entrada**: ficheros de `data/sample` (como `gps_events.json`).
+          - **Salida**: ficheros ubicados en el directorio de entrada que usa el flujo NiFi.
+        """
+    )
+
+    show_text_file_preview(
+        SCRIPTS_DIR / "setup_hdfs.sh",
+        "Ver contenido de `scripts/setup_hdfs.sh`",
+    )
+    show_text_file_preview(
+        SCRIPTS_DIR / "preparar_ingesta_nifi.sh",
+        "Ver contenido de `scripts/preparar_ingesta_nifi.sh`",
     )
 
     if st.button("Ejecutar comandos de Fase I"):
@@ -88,23 +284,87 @@ def page_fase_i_ingesta():
     else:
         st.info("No se ha encontrado `data/sample/gps_events.csv`.")
 
+    st.markdown("---")
+    st.markdown("**Navegación rápida**")
+    cols = st.columns(2)
+    with cols[0]:
+        st.button(
+            "Ir a 0 · Arranque de servicios",
+            key="nav_1_to_0",
+            on_click=navigate_to,
+            args=("0 · Arranque de servicios",),
+        )
+    with cols[1]:
+        st.button(
+            "Ir a 2 · Fase II – Limpieza y enriquecimiento",
+            key="nav_1_to_2",
+            on_click=navigate_to,
+            args=("2 · Fase II – Limpieza y enriquecimiento",),
+        )
+
 
 def page_fase_ii_limpieza_enriquecimiento():
     st.header("2 · Fase II – Limpieza y enriquecimiento")
+    render_top_nav("2 · Fase II – Limpieza y enriquecimiento")
     st.markdown(
         """
-        Desde aquí se lanzan los jobs Spark de limpieza y enriquecimiento:
+        **Objetivo dentro del ciclo KDD (Fase II – Preprocesamiento y transformación)**
+
+        Desde aquí se lanzan los jobs Spark de **limpieza** y **enriquecimiento** de los datos
+        que vienen de la Fase I:
 
         - `clean_and_normalize.py`: normaliza y limpia los datos brutos en HDFS (`raw` → `cleaned`).
         - `enrich_with_hive.py`: cruza datos limpios con maestros de Hive (`warehouses`) y genera `enriched`.
+
+        - **Entrada**:
+          - Datos *raw* en HDFS (`/user/hadoop/proyecto/raw` y rutas definidas en `config.py`).
+          - Tablas Hive de maestros (`warehouses`, `routes`).
+        - **Transformación**:
+          - Limpieza de columnas problemáticas, normalización de tipos y valores.
+          - Join con almacenes/rutas para enriquecer los eventos.
+        - **Salida esperada**:
+          - Directorios `procesado/cleaned` y `procesado/enriched` en HDFS (ficheros Parquet).
+
+        Para más detalle técnico, ver `docs/FASE_II_PREPROCESAMIENTO.md` y `docs/PROBAR_PIPELINE.md`.
         """
     )
+
+    # Documentación técnica de apoyo para esta fase
+    fase2_docs = [
+        ("docs/FASE_II_PREPROCESAMIENTO.md", "Fase II – Preprocesamiento (`docs/FASE_II_PREPROCESAMIENTO.md`)"),
+        ("docs/PROBAR_PIPELINE.md", "Cómo probar el pipeline (`docs/PROBAR_PIPELINE.md`)"),
+    ]
+    for rel_path, label in fase2_docs:
+        doc_path = PROJECT_ROOT / rel_path
+        if doc_path.exists():
+            with st.expander(label):
+                st.markdown(doc_path.read_text(encoding="utf-8"))
 
     st.subheader("Comandos de esta fase")
     st.code(
         "./scripts/run_spark_submit.sh spark/cleaning/clean_and_normalize.py\n"
         "./scripts/run_spark_submit.sh spark/cleaning/enrich_with_hive.py\n",
         language="bash",
+    )
+
+    st.markdown(
+        """
+        **¿Qué hace `run_spark_submit.sh` en esta fase?**
+
+        - **Objetivo general**: encapsular la llamada a `spark-submit` con la configuración del clúster
+          (YARN, jars adicionales, versión de Python, etc.) para no repetir opciones en cada comando.
+        - **Entradas**:
+          - El script Python a ejecutar (`spark/cleaning/clean_and_normalize.py`, `spark/cleaning/enrich_with_hive.py`, etc.).
+          - Parámetros opcionales como `--local` para ejecutar sin YARN (ver `docs/PROBAR_PIPELINE.md`).
+        - **Salidas**:
+          - Jobs Spark ejecutados en el clúster (o en modo local).
+          - Logs de Spark accesibles desde la consola y desde la UI de YARN.
+        """
+    )
+
+    show_text_file_preview(
+        SCRIPTS_DIR / "run_spark_submit.sh",
+        "Ver contenido de `scripts/run_spark_submit.sh`",
     )
 
     if st.button("Lanzar limpieza + enriquecimiento (Spark)"):
@@ -127,15 +387,49 @@ def page_fase_ii_limpieza_enriquecimiento():
         st.subheader("Rutas (`routes.csv`)")
         st.dataframe(routes_df)
 
+    st.markdown("---")
+    st.markdown("**Navegación rápida**")
+    cols = st.columns(2)
+    with cols[0]:
+        st.button(
+            "Ir a 1 · Fase I – Ingesta",
+            key="nav_2_to_1",
+            on_click=navigate_to,
+            args=("1 · Fase I – Ingesta",),
+        )
+    with cols[1]:
+        st.button(
+            "Ir a 3 · Fase II – Grafos",
+            key="nav_2_to_3",
+            on_click=navigate_to,
+            args=("3 · Fase II – Grafos",),
+        )
+
 
 def page_fase_ii_grafos():
     st.header("3 · Fase II – Grafos (GraphFrames)")
+    render_top_nav("3 · Fase II – Grafos")
     st.markdown(
         """
-        Esta pestaña está pensada para acompañar el análisis de grafos:
+        **Objetivo dentro del ciclo KDD (Fase II – Modelado como grafo)**
+
+        Esta pestaña acompaña el **análisis de grafos** sobre la red de transporte:
 
         - `transport_graph.py` construye el grafo almacenes–rutas y calcula shortest paths y componentes.
         - `ver_grafos_resultados.py` permite inspeccionar resultados y generar `grafo.png`.
+
+        - **Entrada**:
+          - Datos enriquecidos en HDFS (`procesado/enriched`).
+          - Definiciones de almacenes y rutas en Hive.
+        - **Transformación**:
+          - Construcción de un grafo dirigido con GraphFrames.
+          - Cálculo de componentes conectados y caminos mínimos.
+        - **Salida esperada**:
+          - Resultados en `procesado/graph` (Parquet).
+          - Imagen `grafo.png` como apoyo visual para la demo.
+
+        Puedes usar esta pestaña para explicar la **topología logística** y cómo el grafo
+        ayuda a entender rutas alternativas, cuellos de botella, etc.
         """
     )
 
@@ -162,18 +456,63 @@ def page_fase_ii_grafos():
     else:
         st.info("Aún no se ha generado `grafo.png`. Ejecuta `ver_grafos_resultados.py --viz` primero.")
 
+    st.markdown("---")
+    st.markdown("**Navegación rápida**")
+    cols = st.columns(2)
+    with cols[0]:
+        st.button(
+            "Ir a 2 · Fase II – Limpieza y enriquecimiento",
+            key="nav_3_to_2",
+            on_click=navigate_to,
+            args=("2 · Fase II – Limpieza y enriquecimiento",),
+        )
+    with cols[1]:
+        st.button(
+            "Ir a 4 · Fase III – Streaming + anomalías",
+            key="nav_3_to_4",
+            on_click=navigate_to,
+            args=("4 · Fase III – Streaming + anomalías",),
+        )
+
 
 def page_fase_iii_streaming_anomalias():
     st.header("4 · Fase III – Streaming de retrasos y anomalías")
+    render_top_nav("4 · Fase III – Streaming + anomalías")
     st.markdown(
         """
+        **Objetivo dentro del ciclo KDD (Fase III – Minería de datos / explotación en tiempo casi real)**
+
         Desde aquí puedes lanzar:
 
         - `delays_windowed.py` (Spark Streaming): lee de Kafka (`raw-data` o ficheros), calcula retrasos
           por ventana y escribe en Hive + MongoDB, generando alertas al topic `alerts`.
         - `anomaly_detection.py` (batch): detecta anomalías sobre los agregados y escribe en MongoDB + Kafka.
+
+        - **Entrada**:
+          - Eventos de GPS ya normalizados (desde Kafka o desde ficheros en HDFS).
+          - Agregados de retrasos generados por el propio streaming.
+        - **Transformación**:
+          - Cálculo de métricas de retrasos por ventana temporal.
+          - Aplicación de modelos de ML (K-Means) para detectar comportamientos anómalos.
+        - **Salida esperada**:
+          - Tabla Hive `aggregated_delays`.
+          - Colecciones MongoDB con agregados y anomalías.
+          - Mensajes de alerta en el topic Kafka `alerts`.
+
+        Esta etapa es la que conecta el *pipeline técnico* con los **casos de uso de monitorización
+        y alertas** que luego se verán reflejados en los dashboards.
         """
     )
+
+    # Documentación adicional para Fase III
+    fase3_docs = [
+        ("docs/FASE_III_STREAMING.md", "Fase III – Streaming y carga multicapa (`docs/FASE_III_STREAMING.md`)"),
+    ]
+    for rel_path, label in fase3_docs:
+        doc_path = PROJECT_ROOT / rel_path
+        if doc_path.exists():
+            with st.expander(label):
+                st.markdown(doc_path.read_text(encoding="utf-8"))
 
     modo_stream = st.selectbox("Modo de entrada para `delays_windowed.py`", ["kafka", "file"])
 
@@ -200,15 +539,47 @@ def page_fase_iii_streaming_anomalias():
         st.subheader("Salida de anomaly_detection.py")
         st.text(output)
 
+    st.markdown("---")
+    st.markdown("**Navegación rápida**")
+    cols = st.columns(2)
+    with cols[0]:
+        st.button(
+            "Ir a 3 · Fase II – Grafos",
+            key="nav_4_to_3",
+            on_click=navigate_to,
+            args=("3 · Fase II – Grafos",),
+        )
+    with cols[1]:
+        st.button(
+            "Ir a 5 · Entorno visual",
+            key="nav_4_to_5",
+            on_click=navigate_to,
+            args=("5 · Entorno visual (Superset / Grafana)",),
+        )
+
 
 def page_entorno_visual():
     st.header("5 · Entorno visual (Superset / Grafana)")
+    render_top_nav("5 · Entorno visual (Superset / Grafana)")
     st.markdown(
         """
-        Sentinel360 ya utiliza **Superset** y **Grafana** para los dashboards finales.
+        **Objetivo dentro del ciclo KDD (Presentación de resultados)** – última etapa del ciclo.
+
+        Sentinel360 ya utiliza **Superset** y **Grafana** para los dashboards finales que consumen
+        los datos generados en las fases anteriores.
 
         Esta pestaña sirve como “hub” con enlaces y recordatorio de los KPIs que se alimentan
         desde Spark y MongoDB hacia MariaDB (`sentinel360_analytics`).
+
+        - **Entrada**:
+          - Tablas y vistas en MariaDB y otras fuentes configuradas para Superset/Grafana.
+        - **Transformación**:
+          - Construcción de dashboards, gráficos de retrasos, tablas de anomalías y KPIs de negocio.
+        - **Salida esperada**:
+          - Cuadros de mando navegables por usuarios de negocio para tomar decisiones.
+
+        Usa esta pestaña como transición entre el **pipeline de datos** y la **capa de presentación**
+        que verá el usuario final.
         """
     )
 
@@ -223,6 +594,8 @@ def page_entorno_visual():
         doc_path = docs_dir / filename
         if doc_path.exists():
             st.markdown(f"- **{desc}**: `docs/{filename}`")
+            with st.expander(f"Ver `{filename}`"):
+                st.markdown(doc_path.read_text(encoding="utf-8"))
         else:
             st.markdown(f"- **{desc}**: `docs/{filename}` *(no encontrado)*")
 
@@ -249,12 +622,17 @@ def main():
         "5 · Entorno visual (Superset / Grafana)": page_entorno_visual,
     }
 
-    choice = st.sidebar.radio(
+    page_names = list(pages.keys())
+    if "sidebar_page" not in st.session_state:
+        st.session_state["sidebar_page"] = page_names[0]
+
+    st.sidebar.radio(
         "Etapa",
-        list(pages.keys()),
-        index=0,
+        page_names,
+        key="sidebar_page",
     )
-    pages[choice]()
+
+    pages[st.session_state["sidebar_page"]]()
 
 
 if __name__ == "__main__":
