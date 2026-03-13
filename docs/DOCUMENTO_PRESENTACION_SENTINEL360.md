@@ -20,7 +20,8 @@ Este documento reúne, en un único fichero imprimible, la descripción de la ar
 4. [Fase III – Streaming de retrasos](#fase-iii--streaming-de-retrasos)
 5. [Fase III – Detección de anomalías (K-Means)](#fase-iii--detección-de-anomalías-k-means)
 6. [Interfaz web de presentación (Streamlit)](#interfaz-web-de-presentación-streamlit)
-7. [Entorno visual y material de apoyo](#entorno-visual-y-material-de-apoyo)
+7. [Ejecución desasistida con Airflow](#ejecución-desasistida-con-airflow)
+8. [Entorno visual y material de apoyo](#entorno-visual-y-material-de-apoyo)
 
 ---
 
@@ -410,9 +411,94 @@ Esto permite, desde la propia UI:
 
 ---
 
+## Ejecución desasistida con Airflow
+
+Para garantizar que no se escapa ninguna inicialización ni orden de ejecución, Sentinel360 incluye un **DAG batch** de referencia en `airflow/dag_sentinel360_batch.py` que encadena de forma orquestada las fases críticas del pipeline.
+
+### DAG `sentinel360_batch_pipeline`
+
+Resumen de objetivos:
+
+1. Limpiar datos raw en HDFS.
+2. Enriquecer con maestros de Hive.
+3. Calcular el grafo de transporte.
+4. Cargar y/o recalcular agregados de retrasos en Hive/MongoDB.
+5. Detectar anomalías batch con K-Means.
+6. Volcar KPIs a MariaDB para dashboards.
+
+Fragmento simplificado del DAG:
+
+```python
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+
+DEFAULT_ARGS = {
+    "owner": "sentinel360",
+    "depends_on_past": False,
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
+}
+
+PROJECT_DIR = "/opt/sentinel360"  # AJUSTAR a la ruta real
+
+def spark_task(cmd: str) -> str:
+    return f"cd {PROJECT_DIR} && ./scripts/run_spark_submit.sh {cmd}"
+
+with DAG(
+    dag_id="sentinel360_batch_pipeline",
+    default_args=DEFAULT_ARGS,
+    schedule_interval="0 2 * * *",  # diario a las 02:00
+    start_date=datetime(2026, 3, 1),
+    catchup=False,
+) as dag:
+    clean_raw = BashOperator(
+        task_id="clean_raw",
+        bash_command=spark_task("spark/cleaning/clean_and_normalize.py"),
+    )
+    enrich_with_hive = BashOperator(
+        task_id="enrich_with_hive",
+        bash_command=spark_task("spark/cleaning/enrich_with_hive.py"),
+    )
+    build_transport_graph = BashOperator(
+        task_id="build_transport_graph",
+        bash_command=spark_task("spark/graph/transport_graph.py"),
+    )
+    load_aggregated_delays = BashOperator(
+        task_id="load_aggregated_delays",
+        bash_command=spark_task("spark/streaming/write_to_hive_and_mongo.py"),
+    )
+    detect_anomalies_batch = BashOperator(
+        task_id="detect_anomalies_batch",
+        bash_command=(
+            f"cd {PROJECT_DIR} && "
+            "./scripts/run_spark_submit.sh spark/ml/anomaly_detection.py"
+        ),
+    )
+    load_kpis_to_mariadb = BashOperator(
+        task_id="load_kpis_to_mariadb",
+        bash_command=(
+            f"cd {PROJECT_DIR} && "
+            "python3 scripts/mongo_to_mariadb_kpi.py --source mongo"
+        ),
+    )
+
+    clean_raw >> enrich_with_hive >> build_transport_graph
+    build_transport_graph >> load_aggregated_delays >> detect_anomalies_batch >> load_kpis_to_mariadb
+```
+
+Con este DAG:
+
+- Un único **Trigger DAG** en Airflow ejecuta secuencialmente el pipeline KDD batch respetando las dependencias.
+- El `schedule_interval` (`0 2 * * *`) permite re‑ejecuciones diarias desasistidas.
+- Logs, reintentos y estados quedan registrados en la UI de Airflow.
+
+---
+
 Este documento `.md` está pensado para convertirse directamente en **PDF imprimible**, reuniendo:
 
 - Descripción textual de la arquitectura.
 - Código de los principales scripts.
 - Fragmentos representativos de los ficheros JSON de ingesta.
+- El DAG de Airflow que orquesta el pipeline batch de Sentinel360.
 
