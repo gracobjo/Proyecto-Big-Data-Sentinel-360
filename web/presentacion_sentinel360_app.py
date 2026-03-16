@@ -173,6 +173,19 @@ def page_arranque_servicios():
         st.subheader("Salida del script")
         st.text(output)
 
+    st.subheader("Ejecutar todo desde Airflow")
+    st.markdown(
+        "Puedes **orquestar todo el pipeline** (arranque de servicios, ingesta, Kafka, Hive, Spark batch/streaming, dashboards) desde **Apache Airflow**. "
+        "Arranca Airflow con `bash ./scripts/start_airflow.sh`, configura `dags_folder` en `airflow.cfg` apuntando a la carpeta `airflow/` del proyecto y dispara los DAGs en el orden indicado en la documentación."
+    )
+    airflow_docs_path = PROJECT_ROOT / "docs" / "AIRFLOW_DAGS.md"
+    if airflow_docs_path.exists():
+        st.markdown("- **Documentación completa**: `docs/AIRFLOW_DAGS.md`")
+        with st.expander("Ver documentación de Airflow (`docs/AIRFLOW_DAGS.md`)"):
+            st.markdown(airflow_docs_path.read_text(encoding="utf-8"))
+    else:
+        st.info("No se ha encontrado `docs/AIRFLOW_DAGS.md` en el proyecto.")
+
     show_text_file_preview(
         SCRIPTS_DIR / "start_servicios.sh",
         "Ver contenido de `scripts/start_servicios.sh`",
@@ -648,7 +661,8 @@ def page_entorno_visual():
     st.info(
         "Para la demo: `cd docker && docker compose up -d mariadb superset grafana`. "
         "Si Superset da 500, ejecuta `./scripts/init_superset.sh`. "
-        "Detalle completo en `docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md`."
+        "Detalle completo en `docs/DASHBOARDS_LEVANTAR_Y_SOLUCIONAR.md`. "
+        "Para orquestar todo el pipeline (servicios, ingesta, Spark, dashboards) desde Airflow, ver la pestaña **0 · Arranque de servicios** → «Ejecutar todo desde Airflow» y `docs/AIRFLOW_DAGS.md`."
     )
 
     st.subheader("Material de presentación")

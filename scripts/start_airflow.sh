@@ -32,15 +32,15 @@ else
   pgrep -f "airflow scheduler" >/dev/null && echo "[OK] Scheduler arrancado" || echo "[?] Scheduler no arrancó (ver logs/airflow-scheduler.log)"
 fi
 
-# Webserver (puerto 8080; si está ocupado por YARN, usar 8081: airflow webserver -p 8081)
+# API server / UI (Airflow 3.x usa api-server en lugar de webserver; puerto 8080; si está ocupado por YARN, usar 8081)
 AIRFLOW_PORT="${AIRFLOW_PORT:-8080}"
-if pgrep -f "airflow webserver" >/dev/null 2>&1; then
-  echo "[OK] Webserver ya en marcha (http://localhost:$AIRFLOW_PORT)"
+if pgrep -f "airflow api" >/dev/null 2>&1; then
+  echo "[OK] API server ya en marcha (http://localhost:$AIRFLOW_PORT)"
 else
-  nohup airflow webserver -p "$AIRFLOW_PORT" >> "$PROJECT_ROOT/logs/airflow-webserver.log" 2>&1 &
-  sleep 3
-  pgrep -f "airflow webserver" >/dev/null && echo "[OK] Webserver arrancado en http://localhost:$AIRFLOW_PORT" || \
-    echo "[?] Webserver no arrancó. Puerto $AIRFLOW_PORT ocupado? Probar: AIRFLOW_PORT=8081 $0"
+  nohup airflow api-server -p "$AIRFLOW_PORT" >> "$PROJECT_ROOT/logs/airflow-webserver.log" 2>&1 &
+  sleep 4
+  pgrep -f "airflow api" >/dev/null && echo "[OK] API server arrancado en http://localhost:$AIRFLOW_PORT" || \
+    echo "[?] API server no arrancó. Puerto $AIRFLOW_PORT ocupado? Probar: AIRFLOW_PORT=8081 $0"
 fi
 
 echo ""

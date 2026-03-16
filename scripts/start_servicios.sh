@@ -55,19 +55,19 @@ echo ""
 
 # --- 1. Hadoop (HDFS + YARN) ---
 if [ -d "$HADOOP_HOME" ]; then
-  if command -v hdfs >/dev/null 2>&1; then
-    if hdfs dfs -ls / >/dev/null 2>&1; then
-      log_ok "HDFS ya está en marcha"
-    else
-      log_warn "HDFS no responde. Arrancar con: $HADOOP_HOME/sbin/start-dfs.sh && $HADOOP_HOME/sbin/start-yarn.sh"
-    fi
+  export PATH="$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH"
+  if hdfs dfs -ls / >/dev/null 2>&1; then
+    log_ok "HDFS ya está en marcha"
   else
-    export PATH="$HADOOP_HOME/bin:$PATH"
-    if hdfs dfs -ls / >/dev/null 2>&1; then
-      log_ok "HDFS ya está en marcha"
+    if [ -x "$HADOOP_HOME/sbin/start-dfs.sh" ]; then
+      "$HADOOP_HOME/sbin/start-dfs.sh" >> "$PROJECT_ROOT/logs/hadoop-dfs.log" 2>&1 && log_ok "HDFS arrancado" || log_warn "No se pudo arrancar HDFS (ver logs/hadoop-dfs.log)"
     else
-      [ -x "$HADOOP_HOME/sbin/start-dfs.sh" ] && "$HADOOP_HOME/sbin/start-dfs.sh" && log_ok "HDFS arrancado" || log_warn "No se pudo arrancar HDFS"
-      [ -x "$HADOOP_HOME/sbin/start-yarn.sh" ] && "$HADOOP_HOME/sbin/start-yarn.sh" && log_ok "YARN arrancado" || log_warn "No se pudo arrancar YARN"
+      log_warn "No se encontró $HADOOP_HOME/sbin/start-dfs.sh"
+    fi
+    if [ -x "$HADOOP_HOME/sbin/start-yarn.sh" ]; then
+      "$HADOOP_HOME/sbin/start-yarn.sh" >> "$PROJECT_ROOT/logs/hadoop-yarn.log" 2>&1 && log_ok "YARN arrancado" || log_warn "No se pudo arrancar YARN (ver logs/hadoop-yarn.log)"
+    else
+      log_warn "No se encontró $HADOOP_HOME/sbin/start-yarn.sh"
     fi
   fi
 else
@@ -148,21 +148,40 @@ echo ""
 # --- 5. MariaDB/MySQL (XAMPP - requerido para Hive metastore) ---
 LAMPP_DIR="${LAMPP_DIR:-/opt/lampp}"
 _mysql_running() { pgrep -f "[m]ysqld" >/dev/null 2>&1 || pgrep -f "[m]ariadbd" >/dev/null 2>&1; }
-if _mysql_running; then
-  log_ok "MariaDB/MySQL ya está en marcha"
+_mysql_listen() { command -v nc >/dev/null 2>&1 && nc -z -w2 localhost 3306 2>/dev/null; }
+# Esperar hasta que el puerto 3306 acepte conexiones (máx. 30 s)
+_wait_mysql_port() {
+  local i=0 max=10
+  while [ $i -lt $max ]; do
+    _mysql_listen && return 0
+    sleep 3
+    i=$((i + 1))
+  done
+  return 1
+}
+
+if _mysql_listen; then
+  log_ok "MariaDB/MySQL ya está en marcha (puerto 3306)"
+elif _mysql_running; then
+  log_ok "MariaDB/MySQL en marcha; esperando puerto 3306..."
+  _wait_mysql_port && log_ok "Puerto 3306 listo" || log_warn "Puerto 3306 no respondió a tiempo"
 elif [ -x "$LAMPP_DIR/lampp" ]; then
-  "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
-  sleep 2
-  if _mysql_running; then
+  # XAMPP suele requerir sudo para startmysql
+  sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || \
+    "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
+  if _wait_mysql_port; then
     log_ok "MariaDB/MySQL (XAMPP) arrancado"
   else
-    sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
-    sleep 2
-    _mysql_running && log_ok "MariaDB/MySQL (XAMPP) arrancado" || \
+    _mysql_running && log_warn "Proceso MySQL existe pero puerto 3306 no responde. Esperar unos segundos y ejecutar Hive a mano." || \
       log_warn "MariaDB/MySQL no arrancó. Ejecutar: sudo $LAMPP_DIR/lampp startmysql"
   fi
-elif command -v systemctl >/dev/null 2>&1 && systemctl is-enabled mariadb >/dev/null 2>&1; then
-  sudo systemctl start mariadb 2>/dev/null && log_ok "MariaDB (systemd) arrancado" || log_warn "MariaDB: sudo systemctl start mariadb"
+elif command -v systemctl >/dev/null 2>&1; then
+  if systemctl is-enabled mariadb >/dev/null 2>&1 || systemctl is-enabled mysql >/dev/null 2>&1; then
+    sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysql 2>/dev/null || true
+    _wait_mysql_port && log_ok "MariaDB (systemd) arrancado" || log_warn "MariaDB: sudo systemctl start mariadb"
+  else
+    log_warn "MariaDB/MySQL no encontrado (Hive metastore lo necesita). XAMPP: sudo $LAMPP_DIR/lampp startmysql  o  sudo systemctl start mariadb"
+  fi
 else
   log_warn "MariaDB/MySQL no encontrado (Hive metastore lo necesita). XAMPP: sudo $LAMPP_DIR/lampp startmysql"
 fi
@@ -175,18 +194,26 @@ if [ -d "$HIVE_HOME" ] && [ -x "$HIVE_HOME/bin/hive" ]; then
   if pgrep -f "HiveMetaStore" >/dev/null 2>&1; then
     log_ok "Hive Metastore ya está en marcha"
   else
-    _mysql_listen() { command -v nc >/dev/null 2>&1 && nc -z -w2 localhost 3306 2>/dev/null; }
     if ! _mysql_listen; then
-      log_warn "MySQL/MariaDB no acepta conexiones en localhost:3306. Arrancar antes: sudo $LAMPP_DIR/lampp startmysql  o  sudo systemctl start mariadb"
-      log_warn "Omitiendo Hive Metastore (arrancar manualmente cuando MySQL esté listo)."
-    else
+      # Último intento: arrancar MySQL y esperar al puerto
+      if [ -x "$LAMPP_DIR/lampp" ]; then
+        sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
+      elif command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysql 2>/dev/null || true
+      fi
+      _wait_mysql_port || true
+    fi
+    if _mysql_listen; then
       nohup hive --service metastore >> "$PROJECT_ROOT/logs/hive-metastore.log" 2>&1 &
       sleep 3
-    if pgrep -f "HiveMetaStore" >/dev/null 2>&1; then
-      log_ok "Hive Metastore arrancado (logs: logs/hive-metastore.log)"
+      if pgrep -f "HiveMetaStore" >/dev/null 2>&1; then
+        log_ok "Hive Metastore arrancado (logs: logs/hive-metastore.log)"
+      else
+        log_warn "Hive Metastore no arrancó. Comprobar: tail -20 logs/hive-metastore.log"
+      fi
     else
-      log_warn "Hive Metastore no arrancó. Comprobar: tail -20 logs/hive-metastore.log"
-    fi
+      log_warn "MySQL/MariaDB no acepta conexiones en localhost:3306. Arrancar antes: sudo $LAMPP_DIR/lampp startmysql  o  sudo systemctl start mariadb"
+      log_warn "Omitiendo Hive Metastore (arrancar manualmente cuando MySQL esté listo)."
     fi
   fi
   if pgrep -f "HiveServer2" >/dev/null 2>&1; then

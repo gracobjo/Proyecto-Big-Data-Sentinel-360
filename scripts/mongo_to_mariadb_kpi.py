@@ -28,12 +28,14 @@ try:
         MONGO_URI,
         MONGO_DB,
         MONGO_AGGREGATED_COLLECTION,
+        MONGO_ANOMALIES_COLLECTION,
         MARIA_DB_URI,
     )
 except ImportError:
     MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
     MONGO_DB = os.environ.get("MONGO_DB", "transport")
     MONGO_AGGREGATED_COLLECTION = os.environ.get("MONGO_COLLECTION", "aggregated_delays")
+    MONGO_ANOMALIES_COLLECTION = os.environ.get("MONGO_ANOMALIES_COLLECTION", "anomalies")
     MARIA_DB_URI = os.environ.get(
         "MARIA_DB_URI",
         "mysql+pymysql://sentinel:sentinel_password@localhost:3306/sentinel360_analytics",
@@ -199,12 +201,48 @@ def load_to_mariadb(df_vehicle: pd.DataFrame, df_warehouse: pd.DataFrame) -> Non
         print(f"Insertadas {len(df)} filas en {table}.")
 
 
-def main(source: str = "mongo") -> None:
+def fetch_anomalies_from_mongo() -> pd.DataFrame:
+    """Lee la colección MongoDB transport.anomalies (salida de anomaly_detection.py)."""
+    client = get_mongo_client()
+    coll = client[MONGO_DB][MONGO_ANOMALIES_COLLECTION]
+    docs = list(coll.find({}))
+    if not docs:
+        return pd.DataFrame()
+    df = pd.DataFrame(docs)
+    for col in ("window_start", "window_end"):
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df
+
+
+def load_anomalies_to_mariadb(df: pd.DataFrame) -> None:
+    """Carga anomalías en la tabla kpi_anomalies de MariaDB (reemplaza contenido en cada ejecución)."""
+    engine = get_sql_engine()
+    with engine.connect() as conn:
+        conn.execute(sqlalchemy.text("DELETE FROM kpi_anomalies"))
+        conn.commit()
+    if df.empty:
+        print("No hay anomalías para exportar.")
+        return
+    cols = ["warehouse_id", "window_start", "window_end", "avg_delay_min", "vehicle_count", "anomaly_flag"]
+    for c in cols:
+        if c not in df.columns and c != "anomaly_flag":
+            df[c] = None
+    if "anomaly_flag" not in df.columns:
+        df["anomaly_flag"] = 1
+    sub = df[["warehouse_id", "window_start", "window_end", "avg_delay_min", "vehicle_count", "anomaly_flag"]].copy()
+    sub["anomaly_flag"] = sub["anomaly_flag"].astype(int)
+    sub.to_sql("kpi_anomalies", con=engine, if_exists="append", index=False)
+    print(f"Exportadas {len(sub)} anomalías a kpi_anomalies.")
+
+
+def main(source: str = "mongo", export_anomalies: bool = False) -> None:
     """
-    Ejecuta el pipeline de ejemplo:
+    Ejecuta el pipeline:
       1) Leer datos crudos de MongoDB o Parquet.
       2) Construir KPIs por vehículo y almacén.
       3) Insertar en MariaDB.
+      4) Si export_anomalies: exportar también transport.anomalies → kpi_anomalies.
     """
     if source == "mongo":
         df_raw = fetch_from_mongo()
@@ -213,14 +251,16 @@ def main(source: str = "mongo") -> None:
     else:
         raise ValueError("source debe ser 'mongo' o 'parquet'")
 
-    if df_raw.empty:
-        print("No hay datos de entrada; termina sin cargar en MariaDB.")
-        return
+    if not df_raw.empty:
+        df_vehicle = build_kpi_by_vehicle(df_raw)
+        df_warehouse = build_kpi_by_warehouse(df_raw)
+        load_to_mariadb(df_vehicle, df_warehouse)
+    else:
+        print("No hay datos de entrada para KPIs por vehículo/almacén.")
 
-    df_vehicle = build_kpi_by_vehicle(df_raw)
-    df_warehouse = build_kpi_by_warehouse(df_raw)
-
-    load_to_mariadb(df_vehicle, df_warehouse)
+    if export_anomalies:
+        df_anom = fetch_anomalies_from_mongo()
+        load_anomalies_to_mariadb(df_anom)
 
 
 if __name__ == "__main__":
@@ -235,7 +275,12 @@ if __name__ == "__main__":
         default="mongo",
         help="Fuente de datos para la carga (por defecto: mongo).",
     )
+    parser.add_argument(
+        "--export-anomalies",
+        action="store_true",
+        help="Exportar además la colección MongoDB anomalies a kpi_anomalies.",
+    )
     args = parser.parse_args()
 
-    main(source=args.source)
+    main(source=args.source, export_anomalies=args.export_anomalies)
 
