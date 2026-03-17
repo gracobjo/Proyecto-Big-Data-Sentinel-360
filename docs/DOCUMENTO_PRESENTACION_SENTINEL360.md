@@ -44,6 +44,162 @@ Toda la configuración (IPs, rutas HDFS, topics Kafka, colecciones Mongo, BBDD M
 
 ---
 
+## Pipeline end-to-end (KDD) – vista completa y trazable
+
+Esta sección muestra el **flujo completo** con ejemplos reales de archivos, topics y rutas (OFICIAL: **NiFi** para GPS y OpenWeather; scripts como alternativa).
+
+```mermaid
+flowchart TD
+  %% Forzar lectura de arriba a abajo por fases
+
+  subgraph IN["Entradas (reales)"]
+    direction TB
+    GPS["GPS logs (JSON/CSV)\n- data/sample/gps_events.json|csv\n- Dir NiFi: /home/hadoop/data/gps_logs/"]
+    OW["OpenWeather API (HTTP)\n- endpoint OpenWeather\n- parámetros: ciudad/coords + API key"]
+    WH["Maestro warehouses.csv\n- data/sample/warehouses.csv"]
+    RT["Maestro routes.csv\n- data/sample/routes.csv"]
+  end
+
+  subgraph KDD1["Fase I — Ingesta (OFICIAL con NiFi)"]
+    direction TB
+    NIFI_GPS["NiFi GPS (importable)\nGetFile → UpdateAttribute → PutHDFS\n+ SplitText → EvaluateJsonPath → RouteOnAttribute\n→ PublishKafka raw/filtered\n(ingest/gps_transport_flow_importable.json)"]
+    NIFI_OW["NiFi OpenWeather (InvokeHTTP)\nInvokeHTTP → (Transform/UpdateAttribute)\n→ PublishKafka + (opcional) PutHDFS\n(doc: ingest/nifi/FLUJO_HTTP_OPENWEATHER.md)"]
+    K_RAW["Kafka: raw-data"]
+    K_FIL["Kafka: filtered-data"]
+    K_ALERTS["Kafka: alerts"]
+    HDFS_RAW["HDFS raw\n/user/hadoop/proyecto/raw/"]
+  end
+
+  subgraph MASTERLOAD["Carga de maestros (warehouses + routes)"]
+    direction TB
+    HDFS_WH["HDFS warehouses\n/user/hadoop/proyecto/warehouses/"]
+    HDFS_RT["HDFS routes\n/user/hadoop/proyecto/routes/"]
+    HIVE_WH["Hive transport.warehouses"]
+    HIVE_RT["Hive transport.routes"]
+  end
+
+  subgraph KDD2["Fase II — Batch (Spark + Hive)"]
+    direction TB
+    CLEAN["clean_and_normalize.py\nEntrada: HDFS_RAW_PATH\nSalida: /procesado/cleaned (Parquet)"]
+    ENRICH["enrich_with_hive.py\nEntrada: cleaned + transport.warehouses\nSalida: /procesado/enriched (Parquet)"]
+    GRAPH["transport_graph.py (GraphFrames)\nEntrada: transport.warehouses + transport.routes\nSalida: /procesado/graph (Parquet)"]
+  end
+
+  subgraph KDD3["Fase III — Retrasos + Anomalías"]
+    direction TB
+    STREAM["delays_windowed.py (streaming)\nEntrada: Kafka raw-data (o file)\nVentanas 15m\nSalida: Hive + Mongo + Kafka alerts"]
+    HIVE_AGG["Hive transport.aggregated_delays"]
+    MONGO_AGG["Mongo transport.aggregated_delays"]
+    KMEANS["anomaly_detection.py (batch K-Means)\nLee Hive aggregated_delays\nEscribe Mongo anomalies + Kafka alerts"]
+    MONGO_ANOM["Mongo transport.anomalies"]
+  end
+
+  subgraph FALLBACK["Plan B (si falla NiFi OpenWeather)"]
+    direction TB
+    S_OW["scripts/ingest_openweather.py\nHTTP → (Kafka/HDFS según config)"]
+  end
+
+  %% Cadena visual por fases (sin alterar dependencias funcionales)
+  IN --> KDD1 --> MASTERLOAD --> KDD2 --> KDD3
+
+  GPS --> NIFI_GPS
+  OW --> NIFI_OW
+  WH --> HDFS_WH --> HIVE_WH
+  RT --> HDFS_RT --> HIVE_RT
+
+  NIFI_GPS --> K_RAW
+  NIFI_GPS --> K_FIL
+  NIFI_GPS --> HDFS_RAW
+
+  NIFI_OW --> K_RAW
+  NIFI_OW --> HDFS_RAW
+
+  HDFS_RAW --> CLEAN --> ENRICH
+  HIVE_WH --> ENRICH
+  HIVE_WH --> GRAPH
+  HIVE_RT --> GRAPH
+
+  K_RAW --> STREAM --> HIVE_AGG
+  STREAM --> MONGO_AGG
+  STREAM --> K_ALERTS
+  HIVE_AGG --> KMEANS --> MONGO_ANOM
+  KMEANS --> K_ALERTS
+
+  OW -. alternativa .-> S_OW
+```
+
+### Resumen trazable por fase (Entrada → Proceso → Salida → Evidencia)
+
+#### Fase I – Ingesta GPS (NiFi)
+
+- **Entrada**: `/home/hadoop/data/gps_logs/` (ej. `gps_events.json|csv`).
+- **Proceso**: `GetFile → UpdateAttribute → PutHDFS + SplitText → EvaluateJsonPath → RouteOnAttribute → PublishKafka`.
+- **Salida**:
+  - HDFS: `/user/hadoop/proyecto/raw/`
+  - Kafka: `raw-data`, `filtered-data`
+- **Evidencia**:
+  - `ingest/gps_transport_flow_importable.json`
+  - `ingest/capturas/grupoProcesadores.png`
+  - `scripts/preparar_ingesta_nifi.sh`
+
+#### Fase I – Ingesta OpenWeather (NiFi oficial, script alternativo)
+
+- **Entrada**: OpenWeather API (HTTP).
+- **Proceso (OFICIAL)**: NiFi `InvokeHTTP` + normalización + publicación (ver doc).
+- **Salida**: Kafka (topic dedicado recomendado o `raw-data` con marcado de origen), y opcionalmente HDFS raw.
+- **Evidencia**:
+  - `ingest/nifi/FLUJO_HTTP_OPENWEATHER.md`
+  - Plan B: `scripts/ingest_openweather.py`
+
+#### Carga de maestros (warehouses + routes)
+
+- **Entrada**: `data/sample/warehouses.csv` y `data/sample/routes.csv`.
+- **Proceso**: copia a HDFS (`/warehouses/`, `/routes/`) y tablas Hive (`transport.warehouses`, `transport.routes`).
+- **Salida**: maestros disponibles para joins y grafos.
+- **Evidencia**: `hive/schema/01_warehouses.sql`, `hive/schema/02_routes.sql`.
+
+#### Fase II – Limpieza (Spark batch)
+
+- **Entrada**: HDFS raw (`/user/hadoop/proyecto/raw/`).
+- **Proceso**: `spark/cleaning/clean_and_normalize.py`.
+- **Salida**: HDFS `.../procesado/cleaned/` (Parquet).
+- **Evidencia**: `spark/cleaning/clean_and_normalize.py`, `scripts/run_spark_submit.sh`.
+
+#### Fase II – Enriquecimiento (Spark + Hive)
+
+- **Entrada**: `cleaned` + Hive `transport.warehouses`.
+- **Proceso**: `spark/cleaning/enrich_with_hive.py` (join por `warehouse_id`).
+- **Salida**: HDFS `.../procesado/enriched/` (Parquet).
+- **Evidencia**: `spark/cleaning/enrich_with_hive.py`.
+
+#### Fase II – Grafos (GraphFrames)
+
+- **Entrada**: Hive `transport.warehouses` (vértices) + `transport.routes` (aristas).
+- **Proceso**: `spark/graph/transport_graph.py` (shortest paths + connected components).
+- **Salida**: HDFS `.../procesado/graph/` (Parquet) + opcional `grafo.png`.
+- **Evidencia**: `spark/graph/transport_graph.py`, `scripts/ver_grafos_resultados.py --viz`.
+
+#### Fase III – Retrasos (Structured Streaming)
+
+- **Entrada**: Kafka `raw-data` o modo `file` leyendo eventos.
+- **Proceso**: `spark/streaming/delays_windowed.py` (ventanas de 15 min).
+- **Salida**:
+  - Hive: `transport.aggregated_delays`
+  - Mongo: `transport.aggregated_delays`
+  - Kafka: `alerts` (anomalías simples en streaming)
+- **Evidencia**: `spark/streaming/delays_windowed.py`, `docs/FASE_III_STREAMING.md`.
+
+#### Fase III – K-Means (batch)
+
+- **Entrada**: Hive `transport.aggregated_delays`.
+- **Proceso**: `spark/ml/anomaly_detection.py` (features: `avg_delay_min`, `vehicle_count`, K=3).
+- **Salida**:
+  - Mongo: `transport.anomalies`
+  - Kafka: `alerts` (eventos `ANOMALY`)
+- **Evidencia**: `spark/ml/anomaly_detection.py` (función `train_kmeans`).
+
+---
+
 ## Fase I – Ingesta (NiFi → Kafka + HDFS raw)
 
 En esta fase se prepara el entorno para que NiFi lea los logs GPS desde un directorio local, publique eventos en Kafka (`raw-data`, `filtered-data`) y mantenga una copia cruda en HDFS (`/user/hadoop/proyecto/raw`).
@@ -501,4 +657,42 @@ Este documento `.md` está pensado para convertirse directamente en **PDF imprim
 - Código de los principales scripts.
 - Fragmentos representativos de los ficheros JSON de ingesta.
 - El DAG de Airflow que orquesta el pipeline batch de Sentinel360.
+
+---
+
+## Anexo – Red logística y datos sintéticos para optimización de rutas
+
+Para poder explicar la **optimización de transporte** sin depender de datos reales, Sentinel360 incluye:
+
+- Un maestro de almacenes (`data/sample/warehouses.csv`) con:
+  - Un nodo principal por capital de provincia (`WH-XXX-CAP`).
+  - Varios nodos secundarios alrededor de cada capital (`WH-XXX-S1 .. WH-XXX-S4`) con coordenadas ligeramente desplazadas.
+- Un maestro de rutas (`data/sample/routes.csv`) que define:
+  - Rutas radiales capital↔secundarios.
+  - Rutas de media/larga distancia entre capitales (Madrid–Barcelona, Barcelona–Bilbao, Sevilla–Cádiz, Murcia–Palma, etc.).
+  - Una topología **estrella híbrida** (estrella + malla) sobre la que se pueden simular alternativas de transporte.
+- Un generador de datos GPS sintéticos: `data/sample/generate_synthetic_gps.py`.
+
+El generador:
+
+- Lee `warehouses.csv` y `routes.csv`.
+- Para un subconjunto de rutas, genera trayectos de ida/vuelta con:
+  - Eventos cada 15 minutos (`ts`) desde el almacén origen al destino.
+  - `lat`/`lon` interpolados (con ruido) entre ambos almacenes.
+  - `route_id`, `warehouse_id` (en origen/destino), `vehicle_id`, `delay_minutes`.
+- Escribe la salida en:
+  - `data/sample/gps_events.csv`
+  - `data/sample/gps_events.json` (JSON lines).
+
+Sobre estos datos, las fases de:
+
+- **Streaming de retrasos** (`delays_windowed.py`) calculan métricas por ventana de 15 min.
+- **Anomalías (K‑Means)** (`anomaly_detection.py`) identifican rutas/ventanas problemáticas.
+
+Y la interfaz Streamlit permite:
+
+- Visualizar la red en un **mapa de España** (capas IGN + OpenStreetMap).
+- Buscar rutas directas y multi‑tramo entre almacenes (camino más corto).
+- Simular incidencias (nieve, atascos, obras) y sus costes en tiempo y combustible.
+- Ver, en el dashboard, la posición agregada de vehículos por almacén y ventana, así como los retrasos y anomalías detectadas.
 

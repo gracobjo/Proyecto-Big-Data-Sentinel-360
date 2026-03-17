@@ -1,6 +1,131 @@
 warehouse_id,name,city,country,lat,lon,capacity
-WH-MAD,Almacen Madrid,Madrid,Spain,40.4168,-3.7038,1000
-WH-BCN,Almacen Barcelona,Barcelona,Spain,41.3851,2.1734,800
-WH-VLC,Almacen Valencia,Valencia,Spain,39.4699,-0.3763,600
-WH-BIL,Almacen Bilbao,Bilbao,Spain,43.2630,-2.9350,500
-WH-SEV,Almacen Sevilla,Sevilla,Spain,37.3891,-5.9845,700
+WH-A-CAP,Almacén A Coruña capital,A Coruña,ES,43.3623,-8.4115,1000
+WH-A-S1,Almacén A Coruña norte,A Coruña-Norte,ES,43.50,-8.41,400
+WH-A-S2,Almacén A Coruña sur,A Coruña-Sur,ES,43.22,-8.41,400
+WH-A-S3,Almacén A Coruña este,A Coruña-Este,ES,43.36,-8.20,400
+WH-A-S4,Almacén A Coruña oeste,A Coruña-Oeste,ES,43.36,-8.60,400
+WH-AL-CAP,Almacén Albacete capital,Albacete,ES,38.9943,-1.8585,900
+WH-AL-S1,Almacén Albacete norte,Albacete-Norte,ES,39.15,-1.85,350
+WH-AL-S2,Almacén Albacete sur,Albacete-Sur,ES,38.85,-1.85,350
+WH-AL-S3,Almacén Albacete este,Albacete-Este,ES,38.99,-1.60,350
+WH-AL-S4,Almacén Albacete oeste,Albacete-Oeste,ES,38.99,-2.05,350
+WH-ALM-CAP,Almacén Almería capital,Almería,ES,36.8340,-2.4637,900
+WH-ALM-S1,Almacén Almería norte,Almería-Norte,ES,37.00,-2.46,350
+WH-ALM-S2,Almacén Almería sur,Almería-Sur,ES,36.68,-2.46,350
+WH-ALM-S3,Almacén Almería este,Almería-Este,ES,36.83,-2.25,350
+WH-ALM-S4,Almacén Almería oeste,Almería-Oeste,ES,36.83,-2.65,350
+WH-AV-CAP,Almacén Ávila capital,Ávila,ES,40.6564,-4.6818,800
+WH-AV-S1,Almacén Ávila norte,Ávila-Norte,ES,40.80,-4.68,320
+WH-AV-S2,Almacén Ávila sur,Ávila-Sur,ES,40.50,-4.68,320
+WH-AV-S3,Almacén Ávila este,Ávila-Este,ES,40.65,-4.45,320
+WH-AV-S4,Almacén Ávila oeste,Ávila-Oeste,ES,40.65,-4.85,320
+WH-BAD-CAP,Almacén Badajoz capital,Badajoz,ES,38.8794,-6.9707,900
+WH-BAD-S1,Almacén Badajoz norte,Badajoz-Norte,ES,39.05,-6.97,350
+WH-BAD-S2,Almacén Badajoz sur,Badajoz-Sur,ES,38.70,-6.97,350
+WH-BAD-S3,Almacén Badajoz este,Badajoz-Este,ES,38.88,-6.75,350
+WH-BAD-S4,Almacén Badajoz oeste,Badajoz-Oeste,ES,38.88,-7.15,350
+WH-BCN-CAP,Almacén Barcelona capital,Barcelona,ES,41.3851,2.1734,1100
+WH-BCN-S1,Almacén Barcelona norte,Barcelona-Norte,ES,41.55,2.17,400
+WH-BCN-S2,Almacén Barcelona sur,Barcelona-Sur,ES,41.20,2.17,400
+WH-BCN-S3,Almacén Barcelona este,Barcelona-Este,ES,41.38,2.40,400
+WH-BCN-S4,Almacén Barcelona oeste,Barcelona-Oeste,ES,41.38,1.95,400
+WH-BIL-CAP,Almacén Bilbao capital,Bilbao,ES,43.2630,-2.9350,900
+WH-BIL-S1,Almacén Bilbao norte,Bilbao-Norte,ES,43.43,-2.93,350
+WH-BIL-S2,Almacén Bilbao sur,Bilbao-Sur,ES,43.10,-2.93,350
+WH-BIL-S3,Almacén Bilbao este,Bilbao-Este,ES,43.26,-2.70,350
+WH-BIL-S4,Almacén Bilbao oeste,Bilbao-Oeste,ES,43.26,-3.10,350
+WH-BURG-CAP,Almacén Burgos capital,Burgos,ES,42.3439,-3.6969,850
+WH-BURG-S1,Almacén Burgos norte,Burgos-Norte,ES,42.50,-3.70,320
+WH-BURG-S2,Almacén Burgos sur,Burgos-Sur,ES,42.20,-3.70,320
+WH-BURG-S3,Almacén Burgos este,Burgos-Este,ES,42.34,-3.45,320
+WH-BURG-S4,Almacén Burgos oeste,Burgos-Oeste,ES,42.34,-3.90,320
+WH-CAD-CAP,Almacén Cádiz capital,Cádiz,ES,36.5297,-6.2926,800
+WH-CAD-S1,Almacén Cádiz norte,Cádiz-Norte,ES,36.70,-6.29,320
+WH-CAD-S2,Almacén Cádiz sur,Cádiz-Sur,ES,36.35,-6.29,320
+WH-CAD-S3,Almacén Cádiz este,Cádiz-Este,ES,36.53,-6.05,320
+WH-CAD-S4,Almacén Cádiz oeste,Cádiz-Oeste,ES,36.53,-6.45,320
+WH-CIUD-CAP,Almacén Ciudad Real capital,Ciudad Real,ES,38.9861,-3.9291,850
+WH-CIUD-S1,Almacén C.Real norte,C.Real-Norte,ES,39.15,-3.93,320
+WH-CIUD-S2,Almacén C.Real sur,C.Real-Sur,ES,38.82,-3.93,320
+WH-CIUD-S3,Almacén C.Real este,C.Real-Este,ES,38.99,-3.70,320
+WH-CIUD-S4,Almacén C.Real oeste,C.Real-Oeste,ES,38.99,-4.10,320
+WH-CORD-CAP,Almacén Córdoba capital,Córdoba,ES,37.8882,-4.7794,900
+WH-CORD-S1,Almacén Córdoba norte,Córdoba-Norte,ES,38.05,-4.78,350
+WH-CORD-S2,Almacén Córdoba sur,Córdoba-Sur,ES,37.72,-4.78,350
+WH-CORD-S3,Almacén Córdoba este,Córdoba-Este,ES,37.89,-4.55,350
+WH-CORD-S4,Almacén Córdoba oeste,Córdoba-Oeste,ES,37.89,-5.00,350
+WH-GR-CAP,Almacén Granada capital,Granada,ES,37.1773,-3.5986,850
+WH-GR-S1,Almacén Granada norte,Granada-Norte,ES,37.35,-3.60,320
+WH-GR-S2,Almacén Granada sur,Granada-Sur,ES,37.00,-3.60,320
+WH-GR-S3,Almacén Granada este,Granada-Este,ES,37.18,-3.40,320
+WH-GR-S4,Almacén Granada oeste,Granada-Oeste,ES,37.18,-3.80,320
+WH-GUAD-CAP,Almacén Guadalajara capital,Guadalajara,ES,40.6333,-3.1667,800
+WH-GUAD-S1,Almacén Guadalajara norte,Guadalajara-Norte,ES,40.80,-3.17,320
+WH-GUAD-S2,Almacén Guadalajara sur,Guadalajara-Sur,ES,40.47,-3.17,320
+WH-GUAD-S3,Almacén Guadalajara este,Guadalajara-Este,ES,40.63,-2.95,320
+WH-GUAD-S4,Almacén Guadalajara oeste,Guadalajara-Oeste,ES,40.63,-3.35,320
+WH-HUEL-CAP,Almacén Huelva capital,Huelva,ES,37.2614,-6.9447,800
+WH-HUEL-S1,Almacén Huelva norte,Huelva-Norte,ES,37.43,-6.94,320
+WH-HUEL-S2,Almacén Huelva sur,Huelva-Sur,ES,37.10,-6.94,320
+WH-HUEL-S3,Almacén Huelva este,Huelva-Este,ES,37.26,-6.70,320
+WH-HUEL-S4,Almacén Huelva oeste,Huelva-Oeste,ES,37.26,-7.10,320
+WH-HUES-CAP,Almacén Huesca capital,Huesca,ES,42.1401,-0.4089,800
+WH-HUES-S1,Almacén Huesca norte,Huesca-Norte,ES,42.30,-0.40,320
+WH-HUES-S2,Almacén Huesca sur,Huesca-Sur,ES,41.98,-0.40,320
+WH-HUES-S3,Almacén Huesca este,Huesca-Este,ES,42.14,-0.20,320
+WH-HUES-S4,Almacén Huesca oeste,Huesca-Oeste,ES,42.14,-0.60,320
+WH-JAEN-CAP,Almacén Jaén capital,Jaén,ES,37.7796,-3.7849,800
+WH-JAEN-S1,Almacén Jaén norte,Jaén-Norte,ES,37.95,-3.78,320
+WH-JAEN-S2,Almacén Jaén sur,Jaén-Sur,ES,37.60,-3.78,320
+WH-JAEN-S3,Almacén Jaén este,Jaén-Este,ES,37.78,-3.55,320
+WH-JAEN-S4,Almacén Jaén oeste,Jaén-Oeste,ES,37.78,-4.00,320
+WH-LEON-CAP,Almacén León capital,León,ES,42.5987,-5.5671,850
+WH-LEON-S1,Almacén León norte,León-Norte,ES,42.77,-5.57,320
+WH-LEON-S2,Almacén León sur,León-Sur,ES,42.43,-5.57,320
+WH-LEON-S3,Almacén León este,León-Este,ES,42.60,-5.30,320
+WH-LEON-S4,Almacén León oeste,León-Oeste,ES,42.60,-5.80,320
+WH-LLOG-CAP,Almacén Logroño capital,Logroño,ES,42.4627,-2.4449,800
+WH-LLOG-S1,Almacén Logroño norte,Logroño-Norte,ES,42.63,-2.44,320
+WH-LLOG-S2,Almacén Logroño sur,Logroño-Sur,ES,42.30,-2.44,320
+WH-LLOG-S3,Almacén Logroño este,Logroño-Este,ES,42.46,-2.20,320
+WH-LLOG-S4,Almacén Logroño oeste,Logroño-Oeste,ES,42.46,-2.65,320
+WH-MAD-CAP,Almacén Madrid capital,Madrid,ES,40.4168,-3.7038,1200
+WH-MAD-S1,Almacén Madrid norte,Madrid-Norte,ES,40.60,-3.70,450
+WH-MAD-S2,Almacén Madrid sur,Madrid-Sur,ES,40.25,-3.70,450
+WH-MAD-S3,Almacén Madrid este,Madrid-Este,ES,40.42,-3.45,450
+WH-MAD-S4,Almacén Madrid oeste,Madrid-Oeste,ES,40.42,-3.95,450
+WH-MAL-CAP,Almacén Málaga capital,Málaga,ES,36.7213,-4.4214,900
+WH-MAL-S1,Almacén Málaga norte,Málaga-Norte,ES,36.90,-4.42,350
+WH-MAL-S2,Almacén Málaga sur,Málaga-Sur,ES,36.55,-4.42,350
+WH-MAL-S3,Almacén Málaga este,Málaga-Este,ES,36.72,-4.20,350
+WH-MAL-S4,Almacén Málaga oeste,Málaga-Oeste,ES,36.72,-4.65,350
+WH-MUR-CAP,Almacén Murcia capital,Murcia,ES,37.9922,-1.1307,850
+WH-MUR-S1,Almacén Murcia norte,Murcia-Norte,ES,38.15,-1.13,320
+WH-MUR-S2,Almacén Murcia sur,Murcia-Sur,ES,37.83,-1.13,320
+WH-MUR-S3,Almacén Murcia este,Murcia-Este,ES,37.99,-0.90,320
+WH-MUR-S4,Almacén Murcia oeste,Murcia-Oeste,ES,37.99,-1.35,320
+WH-OVI-CAP,Almacén Oviedo capital,Oviedo,ES,43.3619,-5.8494,800
+WH-OVI-S1,Almacén Oviedo norte,Oviedo-Norte,ES,43.53,-5.85,320
+WH-OVI-S2,Almacén Oviedo sur,Oviedo-Sur,ES,43.20,-5.85,320
+WH-OVI-S3,Almacén Oviedo este,Oviedo-Este,ES,43.36,-5.60,320
+WH-OVI-S4,Almacén Oviedo oeste,Oviedo-Oeste,ES,43.36,-6.05,320
+WH-PALM-CAP,Almacén Palma capital,Palma,ES,39.5696,2.6502,800
+WH-PALM-S1,Almacén Palma norte,Palma-Norte,ES,39.75,2.65,320
+WH-PALM-S2,Almacén Palma sur,Palma-Sur,ES,39.40,2.65,320
+WH-PALM-S3,Almacén Palma este,Palma-Este,ES,39.57,2.85,320
+WH-PALM-S4,Almacén Palma oeste,Palma-Oeste,ES,39.57,2.45,320
+WH-SEV-CAP,Almacén Sevilla capital,Sevilla,ES,37.3891,-5.9845,950
+WH-SEV-S1,Almacén Sevilla norte,Sevilla-Norte,ES,37.56,-5.98,340
+WH-SEV-S2,Almacén Sevilla sur,Sevilla-Sur,ES,37.22,-5.98,340
+WH-SEV-S3,Almacén Sevilla este,Sevilla-Este,ES,37.39,-5.75,340
+WH-SEV-S4,Almacén Sevilla oeste,Sevilla-Oeste,ES,37.39,-6.15,340
+WH-VALL-CAP,Almacén Valladolid capital,Valladolid,ES,41.6523,-4.7245,850
+WH-VALL-S1,Almacén Valladolid norte,Valladolid-Norte,ES,41.82,-4.72,320
+WH-VALL-S2,Almacén Valladolid sur,Valladolid-Sur,ES,41.50,-4.72,320
+WH-VALL-S3,Almacén Valladolid este,Valladolid-Este,ES,41.65,-4.50,320
+WH-VALL-S4,Almacén Valladolid oeste,Valladolid-Oeste,ES,41.65,-4.90,320
+WH-VLC-CAP,Almacén Valencia capital,Valencia,ES,39.4699,-0.3763,1000
+WH-VLC-S1,Almacén Valencia norte,Valencia-Norte,ES,39.65,-0.38,400
+WH-VLC-S2,Almacén Valencia sur,Valencia-Sur,ES,39.30,-0.38,400
+WH-VLC-S3,Almacén Valencia este,Valencia-Este,ES,39.47,-0.15,400
+WH-VLC-S4,Almacén Valencia oeste,Valencia-Oeste,ES,39.47,-0.60,400

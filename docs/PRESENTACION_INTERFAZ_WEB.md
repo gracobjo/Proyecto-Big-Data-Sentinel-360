@@ -70,7 +70,7 @@ Así, quien use la interfaz puede leer directamente en pantalla **qué está pas
   - Un mapa con los almacenes (`lat`, `lon`) si esas columnas existen (usa `st.map`).
 - **Objetivo en la demo**: enseñar **cómo se transforma y enriquece el dato** antes del análisis (Fase II del KDD).
 
-### 3 · Fase II – Grafos (GraphFrames)
+### 3 · Fase II – Grafos (GraphFrames + simulador de rutas)
 
 - **Función**: `page_fase_ii_grafos`.
 - **Scripts que lanza** (botón **“Lanzar análisis de grafos”**):
@@ -80,7 +80,41 @@ Así, quien use la interfaz puede leer directamente en pantalla **qué está pas
   - Explicación de que se construye el grafo almacenes–rutas y se calculan shortest paths y componentes conectados.
   - La salida de ambos comandos.
   - Si existe `grafo.png` en la raíz del proyecto, la imagen se muestra en la propia pestaña.
-- **Objetivo en la demo**: visualizar la **topología de la red de transporte** como grafo y enlazarlo con los casos de uso de planificación.
+  - Un **mapa interactivo de España** (Folium + OpenStreetMap + capa WMS del IGN) donde:
+    - Cada almacén (`warehouses.csv`) se dibuja como un marcador verde con tooltip descriptivo: `Ciudad – Nombre – [warehouse_id]`.
+    - Cada ruta (`routes.csv`) se dibuja como una línea azul; al pasar el ratón se ve `route_id : origen → destino`.
+  - Un panel de **“Simulación de incidencias en rutas y coste añadido”** donde:
+    - Se selecciona una ruta principal afectada y un tipo de incidencia (nieve, lluvia intensa, atasco, obras).
+    - Se ajustan parámetros económicos (€/km, €/minuto de retraso) con botones **ACEPTAR / CANCELAR**.
+    - Se muestra cómo cambia la duración estimada, el coste de combustible y el coste de retraso en función de la incidencia.
+  - Un bloque de **“Rutas alternativas entre almacenes”**:
+    - Desplegables de almacén origen/destino con etiquetas legibles (`Ciudad – Almacén … – [WH-XXX]`).
+    - Si existe ruta directa, se listan sus métricas.
+    - Si no existe ruta directa, se calcula y muestra un **camino multi‑tramo** (camino más corto por distancia total) entre ambos almacenes.
+    - El itinerario seleccionado se resalta en **rojo** en el mapa; el resto de rutas se muestran difuminadas.
+- **Objetivo en la demo**: visualizar la **topología de la red de transporte** como grafo híbrido (estrella + malla), explicar rutas alternativas entre hubs y cómo las incidencias de tráfico/meteorología impactan en tiempos y costes de transporte.
+
+Además, en la Fase II se apoya la simulación con un generador de GPS sintético:
+
+- **Script**: `data/sample/generate_synthetic_gps.py`.
+- **Qué hace**:
+  - Lee `warehouses.csv` y `routes.csv` (capitales y nodos secundarios).
+  - Genera trayectos de **ida y vuelta** para un subconjunto de rutas (capitals↔capitals y capitals↔secundarios).
+  - Para cada trayecto crea una serie de eventos GPS con:
+    - `event_id`, `vehicle_id`, `ts` (un punto cada 15 minutos).
+    - `lat`, `lon` interpolados entre origen y destino, con pequeño ruido.
+    - `route_id`, `warehouse_id` (en origen/destino) y `delay_minutes` acumulado.
+  - Escribe la salida en:
+    - `data/sample/gps_events.csv`
+    - `data/sample/gps_events.json` (JSON lines).
+- **Uso**:
+
+```bash
+cd /ruta/a/Proyecto-Big-Data-Sentinel-360
+python data/sample/generate_synthetic_gps.py
+```
+
+Con este generador, los jobs de Fase III (streaming + anomalías) disponen de datos coherentes con la red de rutas definida alrededor de cada nodo principal.
 
 ### 4 · Fase III – Streaming de retrasos y anomalías
 

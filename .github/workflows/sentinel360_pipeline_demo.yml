@@ -1,0 +1,187 @@
+name: Sentinel360 - Pipeline demo (finite)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pipeline-demo:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java (Spark)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies (PySpark + clients)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyspark==3.5.1 pandas pymongo kafka-python
+
+      - name: Prepare CI-only config.py (local mode)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp config.py config.dev.py
+
+          cat > config.py <<'EOF'
+          import os
+          from pathlib import Path
+
+          # Sentinel360 - Config CI (GitHub Actions)
+          # Este archivo se genera en el runner (efímero) para ejecutar el pipeline
+          # en modo local, sin tocar la configuración del clúster de desarrollo.
+
+          ROOT = Path(__file__).resolve().parent
+
+          # Local filesystem (no HDFS/YARN)
+          HDFS_NAMENODE = "file:///"
+          HDFS_USER = "runner"
+          HDFS_BASE = "/tmp/sentinel360"
+
+          RAW_DIR = os.environ.get("S360_RAW_DIR", str(ROOT / "data" / "sample"))
+          OUT_BASE = os.environ.get("S360_OUT_BASE", "/tmp/sentinel360/out")
+
+          HDFS_RAW_PATH = RAW_DIR
+          HDFS_PROCESSED_PATH = OUT_BASE
+          HDFS_CLEANED_PATH = f"{OUT_BASE}/cleaned"
+          HDFS_ENRICHED_PATH = f"{OUT_BASE}/enriched"
+          HDFS_GRAPH_PATH = f"{OUT_BASE}/graph"
+          HDFS_AGGREGATED_DELAYS_PATH = f"{OUT_BASE}/aggregated_delays"
+          HDFS_TEMP_PATH = f"{OUT_BASE}/temp"
+          HDFS_MODELS_PATH = f"{OUT_BASE}/models"
+          HDFS_WAREHOUSES_PATH = str(ROOT / "data" / "sample" / "warehouses.csv")
+          HDFS_ROUTES_PATH = str(ROOT / "data" / "sample" / "routes.csv")
+
+          # Kafka (opcional en CI; se ignora si no está disponible)
+          KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9092")
+          KAFKA_TOPIC_RAW = "raw-data"
+          KAFKA_TOPIC_FILTERED = "filtered-data"
+          KAFKA_TOPIC_GPS_EVENTS = "gps-events"
+          KAFKA_TOPIC_ALERTS = "alerts"
+
+          # Spark local
+          SPARK_MASTER = "local[*]"
+          SPARK_DEPLOY_MODE = "client"
+          YARN_RESOURCE_MANAGER_HOST = "127.0.0.1"
+
+          # Hive (metastore local/derby de Spark)
+          HIVE_DATABASE = "default"
+          HIVE_WAREHOUSES_TABLE = "default.warehouses"
+          HIVE_ROUTES_TABLE = "default.routes"
+          HIVE_AGGREGATED_DELAYS_TABLE = "default.aggregated_delays"
+
+          # Checkpoint local
+          STREAMING_CHECKPOINT_PATH = os.environ.get("S360_CHECKPOINT", "/tmp/sentinel360/checkpoints/delays")
+
+          # MongoDB (service container)
+          MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+          MONGO_DB = "transport"
+          MONGO_AGGREGATED_COLLECTION = "aggregated_delays"
+          MONGO_VEHICLE_STATE_COLLECTION = "vehicle_state"
+          MONGO_ANOMALIES_COLLECTION = "anomalies"
+
+          # MariaDB (no usado en este workflow)
+          MARIA_DB_HOST = os.environ.get("MARIA_DB_HOST", "localhost")
+          MARIA_DB_PORT = int(os.environ.get("MARIA_DB_PORT", "3306"))
+          MARIA_DB_USER = os.environ.get("MARIA_DB_USER", "sentinel")
+          MARIA_DB_PASSWORD = os.environ.get("MARIA_DB_PASSWORD", "sentinel_password")
+          MARIA_DB_NAME = os.environ.get("MARIA_DB_NAME", "sentinel360_analytics")
+          MARIA_DB_URI = os.environ.get(
+              "MARIA_DB_URI",
+              f"mysql+pymysql://{MARIA_DB_USER}:{MARIA_DB_PASSWORD}@{MARIA_DB_HOST}:{MARIA_DB_PORT}/{MARIA_DB_NAME}",
+          )
+          EOF
+
+      - name: Create local Hive table for aggregated_delays
+        run: |
+          python - <<'PY'
+          from pyspark.sql import SparkSession
+          from config import SPARK_MASTER, HIVE_AGGREGATED_DELAYS_TABLE
+
+          spark = (
+              SparkSession.builder
+              .master(SPARK_MASTER)
+              .appName("Sentinel360-CI-Init")
+              .enableHiveSupport()
+              .getOrCreate()
+          )
+
+          spark.sql(f"""
+          CREATE TABLE IF NOT EXISTS {HIVE_AGGREGATED_DELAYS_TABLE} (
+            window_start TIMESTAMP,
+            window_end   TIMESTAMP,
+            warehouse_id STRING,
+            avg_delay_min DOUBLE,
+            vehicle_count BIGINT
+          )
+          STORED AS PARQUET
+          """)
+
+          spark.stop()
+          print("OK: tabla Hive local creada:", HIVE_AGGREGATED_DELAYS_TABLE)
+          PY
+
+      - name: Run cleaning (Fase II) - local
+        run: |
+          python spark/cleaning/clean_and_normalize.py "data/sample" "/tmp/sentinel360/out/cleaned"
+
+      - name: Run delays streaming in finite window (file mode + timeout)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # El job es streaming y se queda esperando nuevos ficheros; lo limitamos con timeout.
+          timeout 60s python spark/streaming/delays_windowed.py file "data/sample" "/tmp/sentinel360/checkpoints/delays" || true
+
+      - name: Run anomaly detection (K-Means) - batch
+        run: |
+          python spark/ml/anomaly_detection.py
+
+      - name: Verify MongoDB outputs
+        run: |
+          python - <<'PY'
+          import pymongo
+          from config import MONGO_URI, MONGO_DB, MONGO_AGGREGATED_COLLECTION, MONGO_ANOMALIES_COLLECTION
+
+          client = pymongo.MongoClient(MONGO_URI)
+          db = client[MONGO_DB]
+
+          agg = db[MONGO_AGGREGATED_COLLECTION].count_documents({})
+          anom = db[MONGO_ANOMALIES_COLLECTION].count_documents({})
+          print("Mongo counts:", {"aggregated_delays": agg, "anomalies": anom})
+
+          # Criterio mínimo: que haya agregados, y que el batch haya escrito al menos 1 anomalía o no falle.
+          if agg == 0:
+              raise SystemExit("ERROR: no se insertaron agregados en MongoDB")
+          client.close()
+          PY
+
+      - name: Restore developer config.py (cleanup)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f config.dev.py ]; then
+            mv -f config.dev.py config.py
+          fi
+
