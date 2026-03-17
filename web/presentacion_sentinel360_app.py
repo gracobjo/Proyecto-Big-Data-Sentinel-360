@@ -92,7 +92,8 @@ def render_admin_actions(agg_df: pd.DataFrame | None, anom_df: pd.DataFrame | No
         """
     )
 
-    col1, col2, col3 = st.columns(3)
+    st.markdown("#### Opciones de consulta e informes")
+    col1, col2, col3 = st.columns([2, 1, 1])
 
     with col1:
         umbral = st.slider(
@@ -1505,6 +1506,79 @@ def page_dashboard_kpis():
         """
     )
 
+    # Consultas equivalentes en Hive (histórico) para que el usuario final (y el desarrollador)
+    # puedan copiar/pegar y auditar datos fuera del dashboard.
+    with st.expander("Ver consultas equivalentes en Hive (histórico, copiable a terminal)"):
+        st.markdown("**beeline (ejemplo de conexión)**")
+        st.code(
+            """beeline -u "jdbc:hive2://<HOST_HIVE>:10000/transport" -n <USUARIO>""",
+            language="bash",
+        )
+
+        st.markdown("**Histórico: retrasos por ventana (transport.aggregated_delays)**")
+        st.code(
+            """USE transport;
+
+SELECT
+  window_start,
+  window_end,
+  warehouse_id,
+  avg_delay_min,
+  vehicle_count
+FROM aggregated_delays
+ORDER BY window_start, warehouse_id
+LIMIT 200;""",
+            language="sql",
+        )
+
+        st.markdown("**Histórico por almacén y rango de fechas (ejemplo)**")
+        st.code(
+            """USE transport;
+
+SELECT
+  window_start,
+  avg_delay_min,
+  vehicle_count
+FROM aggregated_delays
+WHERE warehouse_id = 'WH-MAD-CAP'
+  AND window_start >= '2025-05-01 00:00:00'
+  AND window_start <  '2025-06-01 00:00:00'
+ORDER BY window_start;""",
+            language="sql",
+        )
+
+        st.markdown("**Informe: Top 5 almacenes por retraso medio (histórico)**")
+        st.code(
+            """USE transport;
+
+SELECT
+  warehouse_id,
+  AVG(avg_delay_min) AS retraso_medio_min,
+  SUM(vehicle_count) AS vehiculos_totales
+FROM aggregated_delays
+GROUP BY warehouse_id
+ORDER BY retraso_medio_min DESC
+LIMIT 5;""",
+            language="sql",
+        )
+
+        st.markdown("**Informe: ventanas críticas por umbral (ejemplo 30 min)**")
+        st.code(
+            """USE transport;
+
+SELECT
+  window_start,
+  window_end,
+  warehouse_id,
+  avg_delay_min,
+  vehicle_count
+FROM aggregated_delays
+WHERE avg_delay_min > 30
+ORDER BY avg_delay_min DESC
+LIMIT 200;""",
+            language="sql",
+        )
+
     # Inicializamos dataframes como None para poder reutilizarlos en la
     # sección de acciones administrativas (modo real o modo demo).
     agg_df: pd.DataFrame | None = None
@@ -1533,6 +1607,63 @@ def page_dashboard_kpis():
             este dashboard en producción, con datos de retrasos y anomalías ya cargados.
             """
         )
+
+        # Ejemplos de consultas equivalentes, aunque estemos sin conexión real
+        with st.expander("Ver ejemplo de consulta sobre MongoDB (aggregated_delays)"):
+            st.markdown("**Python (PyMongo)**")
+            st.code(
+                f"""from pymongo import MongoClient
+
+client = MongoClient("{MONGO_URI}")
+db = client["{MONGO_DB}"]
+coll = db["{MONGO_AGGREGATED_COLLECTION}"]
+
+docs = list(
+    coll.find({{}}, {{"_id": 0}})
+        .sort("window_start", 1)
+        .limit(200)
+)
+""",
+                language="python",
+            )
+            st.markdown("**mongosh**")
+            st.code(
+                f"""mongo "{MONGO_URI}" --eval '
+db.getSiblingDB("{MONGO_DB}").{MONGO_AGGREGATED_COLLECTION}.find(
+  {{}},
+  {{ _id: 0 }}
+).sort({{ window_start: 1 }}).limit(200)
+'""",
+                language="bash",
+            )
+
+        with st.expander("Ver ejemplo de consulta sobre MongoDB (anomalies)"):
+            st.markdown("**Python (PyMongo)**")
+            st.code(
+                f"""from pymongo import MongoClient
+
+client = MongoClient("{MONGO_URI}")
+db = client["{MONGO_DB}"]
+coll = db["{MONGO_ANOMALIES_COLLECTION}"]
+
+docs = list(
+    coll.find({{"anomaly_flag": True}}, {{"_id": 0}})
+        .sort("window_start", 1)
+        .limit(200)
+)
+""",
+                language="python",
+            )
+            st.markdown("**mongosh**")
+            st.code(
+                f"""mongo "{MONGO_URI}" --eval '
+db.getSiblingDB("{MONGO_DB}").{MONGO_ANOMALIES_COLLECTION}.find(
+  {{ anomaly_flag: true }},
+  {{ _id: 0 }}
+).sort({{ window_start: 1 }}).limit(200)
+'""",
+                language="bash",
+            )
 
         # Datos de ejemplo para ilustrar el comportamiento
         agg_demo = [
@@ -1618,6 +1749,36 @@ def page_dashboard_kpis():
     if selected_wh != "(Todos)":
         query["warehouse_id"] = selected_wh
 
+    # Mostrar la consulta equivalente que se va a ejecutar (para copiar/pegar)
+    with st.expander("Ver consulta equivalente sobre MongoDB (copiable a terminal)"):
+        filtro_str = "{}" if not query else str(query)
+        st.markdown("**Python (PyMongo)**")
+        st.code(
+            f"""from pymongo import MongoClient
+
+client = MongoClient("{MONGO_URI}")
+db = client["{MONGO_DB}"]
+coll = db["{MONGO_AGGREGATED_COLLECTION}"]
+
+docs = list(
+    coll.find({filtro_str}, {{"_id": 0}})
+        .sort("window_start", 1)
+        .limit({max_rows})
+)
+""",
+            language="python",
+        )
+        st.markdown("**mongosh**")
+        st.code(
+            f"""mongo "{MONGO_URI}" --eval '
+db.getSiblingDB("{MONGO_DB}").{MONGO_AGGREGATED_COLLECTION}.find(
+  {filtro_str},
+  {{ _id: 0 }}
+).sort({{ window_start: 1 }}).limit({max_rows})
+'""",
+            language="bash",
+        )
+
     try:
         agg_docs = list(
             agg_coll.find(query, {"_id": 0})
@@ -1660,6 +1821,35 @@ def page_dashboard_kpis():
     anom_query: dict = {"anomaly_flag": True}
     if selected_wh != "(Todos)":
         anom_query["warehouse_id"] = selected_wh
+
+    with st.expander("Ver consulta equivalente sobre MongoDB para anomalías"):
+        filtro_anom_str = str(anom_query)
+        st.markdown("**Python (PyMongo)**")
+        st.code(
+            f"""from pymongo import MongoClient
+
+client = MongoClient("{MONGO_URI}")
+db = client["{MONGO_DB}"]
+coll = db["{MONGO_ANOMALIES_COLLECTION}"]
+
+docs = list(
+    coll.find({filtro_anom_str}, {{"_id": 0}})
+        .sort("window_start", 1)
+        .limit({max_rows})
+)
+""",
+            language="python",
+        )
+        st.markdown("**mongosh**")
+        st.code(
+            f"""mongo "{MONGO_URI}" --eval '
+db.getSiblingDB("{MONGO_DB}").{MONGO_ANOMALIES_COLLECTION}.find(
+  {filtro_anom_str},
+  {{ _id: 0 }}
+).sort({{ window_start: 1 }}).limit({max_rows})
+'""",
+            language="bash",
+        )
 
     try:
         anom_docs = list(
