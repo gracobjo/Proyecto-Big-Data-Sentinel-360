@@ -40,11 +40,11 @@ El objetivo es que, en la demo del máster, puedas mostrar:
      - Dashboard de *Overview* del sistema de transporte.
      - Dashboard de *Detalle* por vehículo / almacén / ventana temporal.
 
-4. **Orquestación (opcional)**
-   - Un DAG de **Airflow** (o un script Python programable) que:
-     - Lee los datos procesados (desde MongoDB o Parquet).
-     - Calcula métricas de interés.
-     - Las vuelca en las tablas `kpi_*` de MariaDB.
+4. **Orquestación (Airflow)**
+   - Varios DAGs de **Airflow** que automatizan:
+   - El arranque/parada de la infraestructura.
+   - La ingesta (Fase I), el preprocesamiento (Fase II) y la minería de datos (Fase III).
+   - La exportación de datos desde Hive/MongoDB a MariaDB para los dashboards.
 
 ---
 
@@ -106,9 +106,9 @@ Para alimentar las tablas de KPIs en MariaDB puedes seguir dos estrategias:
      python scripts/mongo_to_mariadb_kpi.py --source parquet
      ```
 
-2. **DAG de Airflow**
-   - DAG que ejecuta tareas similares al script anterior, pero programadas y monitorizadas.
-   - Ventaja: mostrar en la demo la orquestación de extremo a extremo.
+2. **DAGs de Airflow**
+   - Conjunto de DAGs que ejecutan tareas similares al script anterior, pero programadas y monitorizadas (ver `docs/AIRFLOW_DAGS.md` para detalle). 
+   - Permiten mostrar en la demo la orquestación de extremo a extremo: cluster → pipeline KDD → dashboards.
 
 > Independientemente de la estrategia, la única condición para Superset es que las tablas `kpi_*` estén actualizadas en MariaDB.
 

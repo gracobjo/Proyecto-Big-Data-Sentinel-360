@@ -28,7 +28,7 @@ PAGE_LABELS = [
     "2 · Fase II – Limpieza y enriquecimiento",
     "3 · Fase II – Grafos",
     "4 · Fase III – Streaming + anomalías",
-    "5 · Entorno visual (Superset / Grafana)",
+    "5 · Entorno visual (Superset / Grafana / Airflow)",
     "6 · Dashboard (Retrasos / Anomalías)",
 ]
 
@@ -76,6 +76,25 @@ def get_mongo_client() -> pymongo.MongoClient:
     # Fail-fast para UX: no bloquear ~30s si Mongo no está levantado
     return pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
 
+
+def render_search_highlight(context_text: str) -> None:
+    """
+    Si el usuario ha usado el buscador lateral, muestra un pequeño
+    recuadro explicando por qué esta etapa es relevante para el término.
+    """
+    term = str(st.session_state.get("sidebar_search_term", "") or "").strip()
+    if not term:
+        return
+
+    st.markdown(
+        f"""
+<div style="border-left: 4px solid #4b8bf4; padding: 0.5rem 0.75rem; background-color: #f2f6ff; margin-bottom: 0.75rem;">
+<strong>Buscador KDD</strong> – Has buscado <span style="background-color:#fff3bf;"><strong>{term}</strong></span>.
+Esta etapa está relacionada porque {context_text}.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 def render_admin_actions(agg_df: pd.DataFrame | None, anom_df: pd.DataFrame | None) -> None:
     """
@@ -238,6 +257,9 @@ def show_text_file_preview(path: Path, label: str, max_lines: int = 5) -> None:
 def page_arranque_servicios():
     st.header("0 · Arranque de servicios del clúster")
     render_top_nav("0 · Arranque de servicios")
+    render_search_highlight(
+        "aquí se gestionan los **servicios base del clúster** (HDFS, Kafka, Hive, MongoDB, NiFi, MariaDB) y se relaciona con la orquestación posterior en **Airflow**."
+    )
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD**
@@ -321,6 +343,9 @@ def page_arranque_servicios():
 def page_fase_i_ingesta():
     st.header("1 · Fase I – Ingesta (NiFi → Kafka + HDFS raw)")
     render_top_nav("1 · Fase I – Ingesta")
+    render_search_highlight(
+        "en esta fase se **ingestan los logs GPS y los datos de OpenWeather** con NiFi, se publican en **Kafka** y se dejan copias en **HDFS raw**."
+    )
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD (Fase I – Selección e ingesta de datos)**
@@ -539,6 +564,9 @@ def page_fase_i_ingesta():
 def page_fase_ii_limpieza_enriquecimiento():
     st.header("2 · Fase II – Limpieza y enriquecimiento")
     render_top_nav("2 · Fase II – Limpieza y enriquecimiento")
+    render_search_highlight(
+        "aquí **Spark** limpia y enriquece los datos de GPS con maestros de **rutas** y **almacenes**, preparando las tablas en **Hive**."
+    )
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD (Fase II – Preprocesamiento y transformación)**
@@ -650,6 +678,9 @@ def page_fase_ii_limpieza_enriquecimiento():
 def page_fase_ii_grafos():
     st.header("3 · Fase II – Grafos (GraphFrames)")
     render_top_nav("3 · Fase II – Grafos")
+    render_search_highlight(
+        "esta vista muestra la **topología híbrida de rutas**, los grafos con **GraphFrames**, la búsqueda de **rutas alternativas** y el impacto de incidencias (nieve, atascos) en costes."
+    )
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD (Fase II – Modelado como grafo)**
@@ -1284,6 +1315,9 @@ def page_fase_ii_grafos():
 def page_fase_iii_streaming_anomalias():
     st.header("4 · Fase III – Streaming de retrasos y anomalías")
     render_top_nav("4 · Fase III – Streaming + anomalías")
+    render_search_highlight(
+        "en esta fase se ejecuta el **streaming de retrasos**, se calculan ventanas agregadas y se detectan **anomalías** con K-Means, guardando resultados en **MongoDB** e **Hive**."
+    )
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD (Fase III – Minería de datos / explotación en tiempo casi real)**
@@ -1360,13 +1394,16 @@ def page_fase_iii_streaming_anomalias():
             "Ir a 5 · Entorno visual",
             key="nav_4_to_5",
             on_click=navigate_to,
-            args=("5 · Entorno visual (Superset / Grafana)",),
+            args=("5 · Entorno visual (Superset / Grafana / Airflow)",),
         )
 
 
 def page_entorno_visual():
-    st.header("5 · Entorno visual (Superset / Grafana)")
-    render_top_nav("5 · Entorno visual (Superset / Grafana)")
+    st.header("5 · Entorno visual (Superset / Grafana / Airflow)")
+    render_top_nav("5 · Entorno visual (Superset / Grafana / Airflow)")
+    render_search_highlight(
+        "aquí se documentan los **dashboards** en Superset/Grafana y la **orquestación con Airflow**, incluyendo los DAGs que automatizan el pipeline KDD."
+    )
 
     img_candidates = [
         PROJECT_ROOT / "sentinel360v2.png",
@@ -1407,6 +1444,67 @@ def page_entorno_visual():
         que verá el usuario final.
         """
     )
+
+    st.subheader("Orquestación con Airflow (vista ejecutiva)")
+    st.markdown(
+        """
+        Además de lanzar scripts manualmente desde esta interfaz, Sentinel360 dispone de
+        **DAGs de Airflow** que orquestan el pipeline de forma desasistida:
+
+        - `sentinel360_infra_start` / `sentinel360_infra_stop`: levantan/paran el clúster (HDFS, Kafka, Mongo, MariaDB, NiFi, etc.).
+        - `sentinel360_fase_i_ingesta`: prepara NiFi/Kafka, genera GPS sintético + OpenWeather y deja datos listos en raw.
+        - `sentinel360_fase_ii_preprocesamiento`: ejecuta limpieza, enriquecimiento y grafo de transporte (Spark + Hive).
+        - `sentinel360_fase_iii_batch` / `sentinel360_fase_iii_streaming`: calculan agregados de retrasos, anomalías y KPIs.
+        - `sentinel360_dashboards_levantar` / `sentinel360_dashboards_exportar`: levantan Superset/Grafana y exportan datos de Hive/Mongo a MariaDB para los cuadros de mando.
+
+        De este modo, el **entorno visual** (Superset/Grafana) puede alimentarse automáticamente,
+        sin que el usuario tenga que recordar el orden exacto de scripts.
+        """
+    )
+
+    airflow_md = PROJECT_ROOT / "docs" / "AIRFLOW_DAGS.md"
+    if airflow_md.exists():
+        st.markdown("- **Detalle técnico de los DAGs de Airflow**: `docs/AIRFLOW_DAGS.md`")
+        with st.expander("Ver descripción completa de los DAGs (`docs/AIRFLOW_DAGS.md`)"):
+            st.markdown(airflow_md.read_text(encoding="utf-8"))
+
+        st.markdown("**Ejemplo de DAG batch `sentinel360_fase_iii_batch` (tareas principales):**")
+        st.code(
+            """with DAG(
+    dag_id="sentinel360_fase_iii_batch",
+    default_args=DEFAULT_ARGS,
+    schedule_interval=None,
+    catchup=False,
+) as dag:
+    load_aggregated_delays = BashOperator(
+        task_id="load_aggregated_delays",
+        bash_command=spark_task("spark/streaming/write_to_hive_and_mongo.py"),
+    )
+    detect_anomalies_batch = BashOperator(
+        task_id="detect_anomalies_batch",
+        bash_command=spark_task("spark/ml/anomaly_detection.py"),
+    )
+    export_kpis_to_mariadb = BashOperator(
+        task_id="export_kpis_to_mariadb",
+        bash_command="python3 scripts/mongo_to_mariadb_kpi.py --source mongo",
+    )
+
+    load_aggregated_delays >> detect_anomalies_batch >> export_kpis_to_mariadb
+""",
+            language="python",
+        )
+
+        st.markdown("**Esquema de dependencias (simplificado):**")
+        st.code(
+            """sentinel360_infra_start
+    → sentinel360_fase_i_ingesta
+        → sentinel360_fase_ii_preprocesamiento
+            → sentinel360_fase_iii_batch / sentinel360_fase_iii_streaming
+                → sentinel360_dashboards_exportar
+                    → dashboards en Superset / Grafana
+""",
+            language="text",
+        )
 
     st.subheader("Cómo levantar y solucionar fallos")
     st.markdown(
@@ -1492,6 +1590,9 @@ def page_entorno_visual():
 
 def page_dashboard_kpis():
     st.header("6 · Dashboard de retrasos y anomalías")
+    render_search_highlight(
+        "este es el **cuadro de mando final** para consultar retrasos, anomalías y KPIs, tanto en modo demo como contra **MongoDB/Hive** reales."
+    )
     st.markdown(
         """
         Esta pestaña está pensada para **usuarios finales** (no técnicos):
@@ -1949,13 +2050,55 @@ def main():
         ")"
     )
 
+    # Buscador semántico ligero por etapas (UX mejorada)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Buscador de conceptos (KDD)**")
+    search_term = st.sidebar.text_input(
+        "Escribe una palabra clave (ej. 'grafos', 'airflow', 'retrasos', 'k-means')",
+        key="sidebar_search_term",
+    )
+
+    search_results: list[tuple[str, str]] = []
+    if search_term:
+        term = search_term.lower()
+        # Índice muy ligero: mapeo de etapas a descripciones/keywords
+        page_index: dict[str, str] = {
+            "0 · Arranque de servicios": "infraestructura servicios hdfs yarn kafka hive mongodb mariadb nifi airflow dags start stop cluster",
+            "1 · Fase I – Ingesta": "fase i ingesta nifi kafka hdfs raw gps openweather flujo getfile publishkafka",
+            "2 · Fase II – Limpieza y enriquecimiento": "fase ii limpieza preprocesamiento spark hive enriched cleaned warehouses routes",
+            "3 · Fase II – Grafos": "grafos graphframes rutas almacenes shortest path topologia estrella hibrida simulacion incidencias costes mapa",
+            "4 · Fase III – Streaming + anomalías": "streaming retrasos ventanas aggregated_delays kafka alerts k-means anomaly_detection spark ml",
+            "5 · Entorno visual (Superset / Grafana / Airflow)": "dashboards superset grafana airflow dags orquestacion kpi mariadb export",
+            "6 · Dashboard (Retrasos / Anomalías)": "dashboard final retrasos anomalías consultas mongo hive informes top 5 mapa posiciones",
+        }
+        for label, keywords in page_index.items():
+            if term in keywords:
+                search_results.append(
+                    (
+                        label,
+                        keywords,
+                    )
+                )
+
+        if search_results:
+            st.sidebar.markdown("Resultados de búsqueda:")
+            for label, _ in search_results:
+                st.sidebar.button(
+                    f"Ir a: {label}",
+                    key=f"search_nav_{label}",
+                    on_click=navigate_to,
+                    args=(label,),
+                )
+        else:
+            st.sidebar.caption("Sin coincidencias para este término.")
+
     pages = {
         "0 · Arranque de servicios": page_arranque_servicios,
         "1 · Fase I – Ingesta": page_fase_i_ingesta,
         "2 · Fase II – Limpieza y enriquecimiento": page_fase_ii_limpieza_enriquecimiento,
         "3 · Fase II – Grafos": page_fase_ii_grafos,
         "4 · Fase III – Streaming + anomalías": page_fase_iii_streaming_anomalias,
-        "5 · Entorno visual (Superset / Grafana)": page_entorno_visual,
+        "5 · Entorno visual (Superset / Grafana / Airflow)": page_entorno_visual,
         "6 · Dashboard (Retrasos / Anomalías)": page_dashboard_kpis,
     }
 

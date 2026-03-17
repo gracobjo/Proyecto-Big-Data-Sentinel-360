@@ -521,6 +521,11 @@ La interfaz `web/presentacion_sentinel360_app.py` actúa como **panel de control
 - Streaming y anomalías (Fase III).
 - Entorno visual (Superset / Grafana) y material de presentación.
 
+Para mejorar la UX durante la defensa, la interfaz incluye un **Buscador de conceptos (KDD)** en la barra lateral:
+
+- Permite buscar términos (ej. `grafos`, `airflow`, `retrasos`, `k-means`) y ofrece botones de “Ir a…” hacia las etapas relacionadas.
+- Al entrar en una etapa desde un resultado del buscador, la página muestra un **recuadro resaltado** arriba con el término buscado y una explicación breve del porqué de la relación con esa fase.
+
 Ejemplo de la pestaña de streaming + anomalías:
 
 ```python
@@ -551,7 +556,7 @@ def page_fase_iii_streaming_anomalias():
 
 ## Entorno visual y material de apoyo
 
-En la pestaña **5 · Entorno visual (Superset / Grafana)** se integran:
+En la pestaña **5 · Entorno visual (Superset / Grafana / Airflow)** se integran:
 
 - Enlaces a la documentación de dashboards (`PRESENTACION_ENTORNO_VISUAL.md`, `SUPERSET_DASHBOARDS.md`, `GRAFANA_DASHBOARDS.md`).
 - Imagen de arquitectura (`sentinel360v2.png` / `Sentinel360.png`) como portada visual.

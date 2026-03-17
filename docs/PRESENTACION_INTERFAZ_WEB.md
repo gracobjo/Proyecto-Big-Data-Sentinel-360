@@ -30,6 +30,11 @@ Se abrirá (o te indicará) una URL local, normalmente `http://localhost:8501`.
 
 La app utiliza la barra lateral de Streamlit (`sidebar`) para ofrecer **pestañas por etapa del ciclo KDD**. Internamente, cada pestaña llama a funciones Python que a su vez ejecutan los scripts del proyecto mediante `subprocess.run`, y muestran por pantalla la salida de consola.
 
+Además, para mejorar la UX durante la demo, la interfaz incluye un **buscador de conceptos (KDD)**:
+
+- Permite escribir un término (ej. `grafos`, `airflow`, `retrasos`, `k-means`) y muestra botones de “Ir a…” hacia las etapas relacionadas.
+- Al navegar desde un resultado, la etapa destino muestra en la parte superior un **recuadro resaltado** indicando el término buscado y explicando por qué esa etapa es relevante.
+
 En la propia interfaz, cada pestaña muestra siempre los mismos bloques para que sea muy **intuitivo** seguir la demo sin tener que leer mucho texto externo:
 
 - **Objetivo dentro del ciclo KDD**: qué representa esa etapa (ingesta, preprocesamiento, modelado, streaming, presentación…).
@@ -136,7 +141,7 @@ Con este generador, los jobs de Fase III (streaming + anomalías) disponen de da
   - La salida completa de cada ejecución.
 - **Objetivo en la demo**: enseñar la parte de **monitorización en tiempo casi real** y la **detección de anomalías** sobre los agregados.
 
-### 5 · Entorno visual (Superset / Grafana)
+### 5 · Entorno visual (Superset / Grafana / Airflow)
 
 - **Función**: `page_entorno_visual`.
 - **Qué hace**:
@@ -145,6 +150,7 @@ Con este generador, los jobs de Fase III (streaming + anomalías) disponen de da
     - `docs/PRESENTACION_ENTORNO_VISUAL.md`
     - `docs/SUPERSET_DASHBOARDS.md`
     - `docs/GRAFANA_DASHBOARDS.md`
+  - Resume la **orquestación con Airflow** y enlaza/expone la documentación de DAGs (`docs/AIRFLOW_DAGS.md`).
   - Muestra un recordatorio de que hay que arrancar Superset/Grafana como se tenga configurado y navegar a los dashboards definidos.
 - **Objetivo en la demo**: conectar el **pipeline técnico** que se ha ido viendo en pestañas anteriores con la **presentación visual final**.
 
@@ -159,7 +165,7 @@ Con este generador, los jobs de Fase III (streaming + anomalías) disponen de da
    - `2 · Fase II – Limpieza y enriquecimiento`
    - `3 · Fase II – Grafos`
    - `4 · Fase III – Streaming + anomalías`
-   - `5 · Entorno visual (Superset / Grafana)`
+   - `5 · Entorno visual (Superset / Grafana / Airflow)`
 3. En cada pestaña, pulsar el botón correspondiente para **lanzar los scripts** y mostrar la salida en vivo, explicando brevemente:
    - Qué datos entran.
    - Qué transformación/algoritmo se aplica.
