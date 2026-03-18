@@ -149,6 +149,7 @@ echo ""
 LAMPP_DIR="${LAMPP_DIR:-/opt/lampp}"
 _mysql_running() { pgrep -f "[m]ysqld" >/dev/null 2>&1 || pgrep -f "[m]ariadbd" >/dev/null 2>&1; }
 _mysql_listen() { command -v nc >/dev/null 2>&1 && nc -z -w2 localhost 3306 2>/dev/null; }
+SKIP_SUDO_STARTS="${SENTINEL360_SKIP_SUDO_STARTS:-0}"
 # Esperar hasta que el puerto 3306 acepte conexiones (máx. 30 s)
 _wait_mysql_port() {
   local i=0 max=10
@@ -167,8 +168,13 @@ elif _mysql_running; then
   _wait_mysql_port && log_ok "Puerto 3306 listo" || log_warn "Puerto 3306 no respondió a tiempo"
 elif [ -x "$LAMPP_DIR/lampp" ]; then
   # XAMPP suele requerir sudo para startmysql
-  sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || \
-    "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
+  if [ "$SKIP_SUDO_STARTS" = "1" ]; then
+    log_warn "Modo no interactivo: se omite sudo para arrancar MySQL/MariaDB (XAMPP)."
+    log_warn "Arráncalo manualmente: sudo $LAMPP_DIR/lampp startmysql"
+  else
+    sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || \
+      "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
+  fi
   if _wait_mysql_port; then
     log_ok "MariaDB/MySQL (XAMPP) arrancado"
   else
@@ -177,7 +183,12 @@ elif [ -x "$LAMPP_DIR/lampp" ]; then
   fi
 elif command -v systemctl >/dev/null 2>&1; then
   if systemctl is-enabled mariadb >/dev/null 2>&1 || systemctl is-enabled mysql >/dev/null 2>&1; then
-    sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysql 2>/dev/null || true
+    if [ "$SKIP_SUDO_STARTS" = "1" ]; then
+      log_warn "Modo no interactivo: se omite sudo para arrancar MariaDB/MySQL (systemd)."
+      log_warn "Arráncalo manualmente: sudo systemctl start mariadb  (o mysql)"
+    else
+      sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysql 2>/dev/null || true
+    fi
     _wait_mysql_port && log_ok "MariaDB (systemd) arrancado" || log_warn "MariaDB: sudo systemctl start mariadb"
   else
     log_warn "MariaDB/MySQL no encontrado (Hive metastore lo necesita). XAMPP: sudo $LAMPP_DIR/lampp startmysql  o  sudo systemctl start mariadb"
@@ -197,9 +208,17 @@ if [ -d "$HIVE_HOME" ] && [ -x "$HIVE_HOME/bin/hive" ]; then
     if ! _mysql_listen; then
       # Último intento: arrancar MySQL y esperar al puerto
       if [ -x "$LAMPP_DIR/lampp" ]; then
-        sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
+        if [ "$SKIP_SUDO_STARTS" = "1" ]; then
+          log_warn "Modo no interactivo: no se reintenta arrancar MySQL con sudo (XAMPP)."
+        else
+          sudo "$LAMPP_DIR/lampp" startmysql >> "$PROJECT_ROOT/logs/lampp-mysql.log" 2>&1 || true
+        fi
       elif command -v systemctl >/dev/null 2>&1; then
-        sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysql 2>/dev/null || true
+        if [ "$SKIP_SUDO_STARTS" = "1" ]; then
+          log_warn "Modo no interactivo: no se reintenta arrancar MariaDB con sudo (systemd)."
+        else
+          sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysql 2>/dev/null || true
+        fi
       fi
       _wait_mysql_port || true
     fi

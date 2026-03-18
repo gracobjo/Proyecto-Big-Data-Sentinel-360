@@ -120,6 +120,21 @@ Puedes cambiarla de dos formas:
 
 ---
 
+### 4.1 Nota importante: MariaDB (LAMP/XAMPP) y ejecuciones desasistidas
+
+En algunos entornos de laboratorio, **MariaDB/MySQL** se arranca como parte de un paquete **LAMP/XAMPP** (por ejemplo, `sudo /opt/lampp/lampp startmysql`).  
+Cuando Airflow ejecuta un `BashOperator`, **no puede introducir una contraseña** si el comando requiere `sudo` interactivo.
+
+Por eso, el DAG `sentinel360_infra_start` ejecuta `scripts/start_servicios.sh` con:
+
+- `SENTINEL360_SKIP_SUDO_STARTS=1`
+
+En ese modo, el script **no intenta** arrancar MySQL/MariaDB mediante `sudo` y muestra un aviso con el comando manual.
+
+Guía completa: `docs/GUIA_ARRANQUE_AIRFLOW.md`.
+
+---
+
 ### 5. Orden sugerido de ejecución
 
 1. **sentinel360_infra_start** — Levantar servicios del clúster.
@@ -136,4 +151,6 @@ Puedes cambiarla de dos formas:
 - Los DAGs viven en el repositorio en `airflow/`.
 - Para que Airflow los vea, deben estar bajo su `dags_folder` (o apuntar `dags_folder` a la carpeta `airflow/` del proyecto).
 - Ajusta la ruta del proyecto con la variable `sentinel360_project_dir` en Airflow o editando el `PROJECT_DIR` en los DAGs.
+
+Además, cada DAG termina con una tarea **`reporte_ejecucion`** que genera un reporte en `reports/airflow/<dag_id>/` para poder **descargar evidencias** de que el pipeline se ejecutó paso a paso.
 

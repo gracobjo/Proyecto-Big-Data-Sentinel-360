@@ -1468,6 +1468,45 @@ def page_entorno_visual():
         with st.expander("Ver descripción completa de los DAGs (`docs/AIRFLOW_DAGS.md`)"):
             st.markdown(airflow_md.read_text(encoding="utf-8"))
 
+    st.markdown("**Evidencias descargables (reportes de ejecuciones Airflow)**")
+    st.markdown(
+        """
+        Cuando un DAG termina, la última tarea `reporte_ejecucion` genera un fichero Markdown en:
+
+        - `reports/airflow/<dag_id>/LATEST.md` (último reporte)
+        - `reports/airflow/<dag_id>/<run_id>_*.md` (histórico)
+
+        Esto sirve como **evidencia** para documentar que se han ejecutado las tareas paso a paso.
+        """
+    )
+    reports_base = PROJECT_ROOT / "reports" / "airflow"
+    if reports_base.exists():
+        dag_dirs = sorted([p for p in reports_base.iterdir() if p.is_dir()], key=lambda p: p.name)
+        if dag_dirs:
+            dag_sel = st.selectbox(
+                "Selecciona DAG para ver/descargar su último reporte",
+                options=[p.name for p in dag_dirs],
+                key="airflow_reports_dag_select",
+            )
+            latest = reports_base / dag_sel / "LATEST.md"
+            if latest.exists():
+                md_text = latest.read_text(encoding="utf-8", errors="ignore")
+                with st.expander("Ver reporte (LATEST.md)"):
+                    st.markdown(md_text)
+                st.download_button(
+                    label="Descargar reporte (Markdown)",
+                    data=md_text.encode("utf-8"),
+                    file_name=f"airflow_report_{dag_sel}_LATEST.md",
+                    mime="text/markdown",
+                )
+            else:
+                st.info("Aún no hay `LATEST.md` para este DAG. Ejecuta el DAG al menos una vez.")
+        else:
+            st.info("No hay subcarpetas de reportes todavía. Ejecuta algún DAG para generarlas.")
+    else:
+        st.info("Aún no existe `reports/airflow/`. Se creará automáticamente tras ejecutar un DAG.")
+
+    if airflow_md.exists():
         st.markdown("**Ejemplo de DAG batch `sentinel360_fase_iii_batch` (tareas principales):**")
         st.code(
             """with DAG(

@@ -9,12 +9,15 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
 
 try:
     from airflow.models import Variable
     PROJECT_DIR = Variable.get("sentinel360_project_dir", default_var="/home/hadoop/Documentos/ProyectoBigData")
 except Exception:
     PROJECT_DIR = "/home/hadoop/Documentos/ProyectoBigData"
+
+from sentinel360_reporting import Sentinel360ReportConfig, write_dag_run_report  # type: ignore
 
 with DAG(
     dag_id="sentinel360_infra_start",
@@ -25,7 +28,19 @@ with DAG(
     tags=["sentinel360", "infra", "kdd-0"],
     description="Arrancar todos los servicios del clúster (HDFS, YARN, Kafka, Hive, NiFi, etc.).",
 ) as dag:
-    BashOperator(
+    start_all_services = BashOperator(
         task_id="start_all_services",
-        bash_command=f"cd {PROJECT_DIR} && bash ./scripts/start_servicios.sh",
+        bash_command=(
+            f"cd {PROJECT_DIR} && "
+            "SENTINEL360_SKIP_SUDO_STARTS=1 "
+            "bash ./scripts/start_servicios.sh"
+        ),
     )
+
+    report = PythonOperator(
+        task_id="reporte_ejecucion",
+        python_callable=write_dag_run_report,
+        op_kwargs={"config": Sentinel360ReportConfig(project_dir=PROJECT_DIR)},
+    )
+
+    start_all_services >> report
