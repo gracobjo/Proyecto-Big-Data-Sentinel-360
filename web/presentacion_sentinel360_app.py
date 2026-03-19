@@ -2612,25 +2612,41 @@ def page_documentacion_busqueda() -> None:
     results = sorted(results, key=lambda x: x[0], reverse=True)[: int(max_results)]
     st.markdown(f"**Top {len(results)} resultados** (ámbito: `{scope}`)")
 
+    st.caption(
+        "Cada resultado muestra una previa corta. Puedes desplegar el detalle o descargar el `.md` completo."
+    )
+
     for score, path, snippet in results:
         rel = str(path.relative_to(PROJECT_ROOT))
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception as exc:  # pragma: no cover - interactivo
+            st.error(f"No se pudo leer `{rel}`: {exc}")
+            continue
+
+        # Previa: primeras N líneas
+        lines = content.splitlines()
+        max_preview_lines = 40
+        if len(lines) > max_preview_lines:
+            preview = "\n".join(lines[:max_preview_lines]) + "\n\n..."
+        else:
+            preview = "\n".join(lines)
+
         with st.expander(f"{rel}  ·  score {score:.1f}", expanded=False):
             if snippet:
                 st.markdown(f"**Snippet:** {snippet}")
-            try:
-                content = path.read_text(encoding="utf-8", errors="ignore")
-            except Exception as exc:  # pragma: no cover - interactivo
-                st.error(f"No se pudo leer el fichero: {exc}")
-                continue
+                st.markdown("---")
+
+            st.markdown("**Previa (primeras líneas):**")
+            st.markdown(preview)
+
             st.download_button(
-                "Descargar .md",
+                "Descargar `.md` completo",
                 data=content.encode("utf-8"),
                 file_name=path.name,
                 mime="text/markdown",
                 key=f"dl_{rel}",
             )
-            st.markdown("---")
-            st.markdown(content)
 
 
 def main():
