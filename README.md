@@ -2,6 +2,11 @@
 
 Monitorización de red de transporte global siguiendo el ciclo **KDD** (Knowledge Discovery in Databases) con stack Apache.
 
+## Documentación (índice rápido)
+
+- Índice de documentación: `docs/README.md`
+- Despliegue en GitHub Codespaces (modo demo): `docs/DESPLIEGUE_CODESPACES.md`
+
 ## Por qué el nombre Sentinel360
 
 - **Sentinel**: hace referencia a un **sistema de vigilancia** que monitoriza continuamente el estado de la red de transporte.

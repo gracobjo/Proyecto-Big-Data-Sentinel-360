@@ -2,12 +2,20 @@ import subprocess
 import sys
 import base64
 import heapq
+import re
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
+
+# Asegurar que el proyecto raíz está en el PYTHONPATH.
+# Streamlit ejecuta el script dentro de `web/`, por lo que `config.py` (en la raíz)
+# puede no ser importable si no añadimos el directorio padre.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import (  # type: ignore
     MONGO_URI,
@@ -18,8 +26,9 @@ from config import (  # type: ignore
 
 import pymongo
 
+MONGO_INCIDENTS_COLLECTION = "incidents"
+MONGO_DECISIONS_COLLECTION = "decisions"
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 DATA_SAMPLE_DIR = PROJECT_ROOT / "data" / "sample"
 PAGE_LABELS = [
@@ -30,6 +39,9 @@ PAGE_LABELS = [
     "4 · Fase III – Streaming + anomalías",
     "5 · Entorno visual (Superset / Grafana / Airflow)",
     "6 · Dashboard (Retrasos / Anomalías)",
+    "6.1 · Incidencias y decisiones",
+    "6.2 · Histórico y SLA",
+    "7 · Documentación (buscador)",
 ]
 
 # Parámetros por defecto para la simulación de grafos / incidencias.
@@ -75,6 +87,100 @@ def load_sample_data():
 def get_mongo_client() -> pymongo.MongoClient:
     # Fail-fast para UX: no bloquear ~30s si Mongo no está levantado
     return pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
+
+
+def get_store() -> dict:
+    """
+    Pequeño "store" persistente para modo demo (sin Mongo).
+    """
+    if "control_tower_store" not in st.session_state:
+        st.session_state["control_tower_store"] = {
+            "incidents": [],
+            "decisions": [],
+        }
+    return st.session_state["control_tower_store"]
+
+
+def _now_iso() -> str:
+    return pd.Timestamp.utcnow().isoformat(timespec="seconds")
+
+
+def compute_status(agg_df: pd.DataFrame | None, anom_df: pd.DataFrame | None) -> tuple[str, str]:
+    """
+    Devuelve (label, color_hex) en base a reglas simples para operación diaria.
+    """
+    if agg_df is None or agg_df.empty:
+        return ("SIN DATOS", "#6c757d")
+
+    avg_delay = float(agg_df.get("avg_delay_min", pd.Series([0.0])).mean())
+    anom_ratio = 0.0
+    if anom_df is not None and not anom_df.empty and agg_df is not None and not agg_df.empty:
+        # Aproximación: anomalías / filas de agregados mostradas
+        anom_ratio = min(1.0, len(anom_df) / max(1, len(agg_df)))
+
+    if avg_delay >= 45 or anom_ratio >= 0.20:
+        return ("CRÍTICO", "#dc3545")
+    if avg_delay >= 20 or anom_ratio >= 0.08:
+        return ("DEGRADADO", "#fd7e14")
+    return ("NORMAL", "#198754")
+
+
+def estimate_delay_cost_eur(agg_df: pd.DataFrame | None, delay_cost_eur_per_min: float) -> float:
+    if agg_df is None or agg_df.empty:
+        return 0.0
+    if {"avg_delay_min", "vehicle_count"}.issubset(agg_df.columns):
+        return float((agg_df["avg_delay_min"] * agg_df["vehicle_count"]).sum() * delay_cost_eur_per_min)
+    if "avg_delay_min" in agg_df.columns:
+        return float(agg_df["avg_delay_min"].sum() * delay_cost_eur_per_min)
+    return 0.0
+
+
+def _ensure_demo_incidents_from_anomalies(anom_df: pd.DataFrame | None) -> None:
+    store = get_store()
+    if store.get("incidents"):
+        return
+    if anom_df is None or anom_df.empty:
+        return
+    # Crear incidencias “activas” a partir de anomalías (demo)
+    for i, row in anom_df.head(20).iterrows():
+        store["incidents"].append(
+            {
+                "incident_id": f"INC-DEMO-{i}",
+                "created_at": _now_iso(),
+                "status": "nueva",
+                "severity": float(row.get("avg_delay_min", 0) or 0),
+                "warehouse_id": str(row.get("warehouse_id", "") or ""),
+                "window_start": str(row.get("window_start", "") or ""),
+                "reason": "Anomalía detectada (K-Means)",
+                "asignado_a": "",
+            }
+        )
+
+
+def upsert_incident(*, db: pymongo.database.Database | None, incident: dict) -> None:
+    """
+    Inserta/actualiza incidencia en Mongo si está disponible; si no, en store demo.
+    """
+    if db is None:
+        store = get_store()
+        existing = [x for x in store["incidents"] if x.get("incident_id") == incident.get("incident_id")]
+        if existing:
+            idx = store["incidents"].index(existing[0])
+            store["incidents"][idx] = incident
+        else:
+            store["incidents"].append(incident)
+        return
+    coll = db[MONGO_INCIDENTS_COLLECTION]
+    coll.update_one({"incident_id": incident.get("incident_id")}, {"$set": incident}, upsert=True)
+
+
+def add_decision(*, db: pymongo.database.Database | None, decision: dict) -> None:
+    if db is None:
+        store = get_store()
+        store["decisions"].append(decision)
+        return
+    coll = db[MONGO_DECISIONS_COLLECTION]
+    coll.insert_one(decision)
 
 
 def render_search_highlight(context_text: str) -> None:
@@ -1628,9 +1734,10 @@ def page_entorno_visual():
 
 
 def page_dashboard_kpis():
-    st.header("6 · Dashboard de retrasos y anomalías")
+    st.header("6 · Dashboard (Control Tower – operación diaria)")
+    render_top_nav("6 · Dashboard (Retrasos / Anomalías)")
     render_search_highlight(
-        "este es el **cuadro de mando final** para consultar retrasos, anomalías y KPIs, tanto en modo demo como contra **MongoDB/Hive** reales."
+        "este es el **cuadro de mando operativo** (Control Tower) para monitorizar retrasos, anomalías e incidencias en tiempo casi real."
     )
     st.markdown(
         """
@@ -1718,6 +1825,29 @@ ORDER BY avg_delay_min DESC
 LIMIT 200;""",
             language="sql",
         )
+
+    st.markdown("### Filtros globales")
+    colf1, colf2, colf3, colf4 = st.columns([1.2, 1.2, 1, 1])
+    with colf1:
+        time_scope = st.selectbox(
+            "Ventana temporal",
+            options=["Últimas 2h", "Últimas 6h", "Últimas 24h", "Todo (según límite)"],
+            index=1,
+            key="ct_time_scope",
+        )
+    with colf2:
+        min_sev = st.slider("Severidad mínima (min retraso)", 0, 120, 20, 5, key="ct_min_sev")
+    with colf3:
+        max_rows = st.slider("Máx. filas (operación)", min_value=50, max_value=1000, value=200, step=50, key="ct_max_rows")
+    with colf4:
+        st.button(
+            "Ir a Incidencias →",
+            key="ct_nav_incidents",
+            on_click=navigate_to,
+            args=("6.1 · Incidencias y decisiones",),
+        )
+
+    st.markdown("---")
 
     # Inicializamos dataframes como None para poder reutilizarlos en la
     # sección de acciones administrativas (modo real o modo demo).
@@ -1859,10 +1989,76 @@ db.getSiblingDB("{MONGO_DB}").{MONGO_ANOMALIES_COLLECTION}.find(
         st.subheader("Ventanas marcadas como anómalas (ejemplo)")
         st.dataframe(anom_df)
 
+        _ensure_demo_incidents_from_anomalies(anom_df)
+        incidents_demo = get_store().get("incidents", [])
+        incidents_filtered_demo = [
+            x for x in incidents_demo
+            if float(x.get("severity", 0) or 0) >= float(st.session_state.get("ct_min_sev", 0))
+        ]
+
+        st.markdown("---")
+        st.subheader("Mapa operativo y panel de alertas (demo)")
+        map_col_d, alert_col_d = st.columns([1.5, 1])
+        with map_col_d:
+            ventanas_d = sorted(agg_df["window_start"].dt.to_pydatetime())
+            if ventanas_d:
+                ventana_sel_d = st.selectbox(
+                    "Ventana 15 min",
+                    options=ventanas_d,
+                    format_func=lambda dt: dt.strftime("%Y-%m-%d %H:%M"),
+                    key="ct_map_ventana_demo",
+                )
+                sel_mask_d = agg_df["window_start"] == ventana_sel_d
+                agg_win_d = agg_df[sel_mask_d].copy()
+                if not agg_win_d.empty:
+                    _, wh_df_map_d, _ = load_sample_data()
+                    if st.session_state.get("warehouses_override_df") is not None:
+                        wh_df_map_d = st.session_state["warehouses_override_df"]
+                    if wh_df_map_d is not None and {"warehouse_id", "lat", "lon"}.issubset(wh_df_map_d.columns):
+                        merged_d = agg_win_d.merge(
+                            wh_df_map_d[["warehouse_id", "lat", "lon"]],
+                            on="warehouse_id",
+                            how="left",
+                        ).dropna(subset=["lat", "lon"])
+                        if not merged_d.empty:
+                            m_d = folium.Map(location=[40.0, -3.7], zoom_start=5, tiles="OpenStreetMap")
+                            for _, row in merged_d.iterrows():
+                                tooltip_d = f"Almacén: {row['warehouse_id']}\nRetraso: {row.get('avg_delay_min', 'N/A')} min"
+                                folium.CircleMarker(
+                                    location=[row["lat"], row["lon"]],
+                                    radius=6,
+                                    color="#FF8800" if row.get("avg_delay_min", 0) > 20 else "#00C846",
+                                    fill=True,
+                                    fill_opacity=0.9,
+                                    tooltip=tooltip_d,
+                                ).add_to(m_d)
+                            st_folium(m_d, width=None, height=420)
+            else:
+                st.info("Sin ventanas en el ejemplo.")
+        with alert_col_d:
+            st.markdown("**Alertas activas (demo)**")
+            if incidents_filtered_demo:
+                for inc in incidents_filtered_demo[:15]:
+                    st.caption(f"`{inc.get('incident_id')}` · {inc.get('warehouse_id')} · **{inc.get('asignado_a') or '—'}**")
+                sel_id_d = st.selectbox("Abrir", [str(x.get("incident_id")) for x in incidents_filtered_demo], key="ct_incident_select_demo")
+                op_name_d = st.text_input("Operador", value="admin", key="ct_operator_name_demo")
+                if st.button("Ver detalle →", key="ct_open_incident_demo"):
+                    st.session_state["selected_incident_id"] = sel_id_d
+                    navigate_to("6.1 · Incidencias y decisiones")
+                if st.button("Asignar a mí", key="ct_assign_me_demo"):
+                    t = next((x for x in incidents_filtered_demo if str(x.get("incident_id")) == sel_id_d), None)
+                    if t:
+                        t["asignado_a"] = op_name_d or "admin"
+                        t["updated_at"] = _now_iso()
+                        upsert_incident(db=None, incident=t)
+                    st.success("Asignado.")
+            else:
+                st.info("No hay alertas en demo.")
+
         render_admin_actions(agg_df, anom_df)
         return
 
-    st.subheader("Retrasos agregados por almacén")
+    st.subheader("KPIs y situación operativa")
     agg_coll = db[MONGO_AGGREGATED_COLLECTION]
 
     # Obtener lista de almacenes disponibles (warehouse_id)
@@ -1878,12 +2074,14 @@ db.getSiblingDB("{MONGO_DB}").{MONGO_ANOMALIES_COLLECTION}.find(
         st.warning(f"No se pudo leer la lista de almacenes desde MongoDB: {exc}")
         warehouse_ids = []
     selected_wh = st.selectbox(
-        "Selecciona almacén (warehouse_id)",
+        "Ámbito operativo: almacén",
         options=["(Todos)"] + warehouse_ids,
+        help="Para operación diaria, filtra rápidamente el mapa, alertas y series temporales.",
     )
 
     # Filtro simple de número máximo de registros para la vista
-    max_rows = st.slider("Número máximo de filas a mostrar", min_value=50, max_value=1000, value=200, step=50)
+    # (se controla desde los filtros globales del Control Tower)
+    max_rows = int(st.session_state.get("ct_max_rows", 200))
 
     query: dict = {}
     if selected_wh != "(Todos)":
@@ -1943,15 +2141,35 @@ db.getSiblingDB("{MONGO_DB}").{MONGO_AGGREGATED_COLLECTION}.find(
                 axis=1,
             )
 
-        st.markdown("**Tabla de retrasos con métricas de optimización**")
+        # Barra superior: estado y KPIs live
+        status_label, status_color = compute_status(agg_df, anom_df)
+        delay_cost = estimate_delay_cost_eur(agg_df, GRAPH_DELAY_COST_EUR_PER_MIN)
+        vehicle_active = int(agg_df.get("vehicle_count", pd.Series([0])).sum()) if agg_df is not None else 0
+        avg_delay = float(agg_df.get("avg_delay_min", pd.Series([0.0])).mean()) if agg_df is not None else 0.0
+
+        k1, k2, k3, k4 = st.columns([1, 1, 1, 1.2])
+        with k1:
+            st.metric("Retraso medio (min)", f"{avg_delay:.1f}")
+        with k2:
+            st.metric("Vehículos activos (suma)", f"{vehicle_active}")
+        with k3:
+            st.markdown(
+                f"""
+<div style="padding: 0.5rem 0.75rem; border-radius: 0.5rem; background: {status_color}; color: white; font-weight: 700; text-align:center;">
+ESTADO: {status_label}
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        with k4:
+            st.metric("Coste estimado retraso (€)", f"{delay_cost:,.0f}")
+
+        st.markdown("**Operación (tabla de retrasos con métricas)**")
         st.dataframe(agg_df)
 
         if {"window_start", "avg_delay_min"}.issubset(agg_df.columns):
-            st.markdown("**Evolución del retraso medio por ventana (15 min)**")
-            st.line_chart(
-                agg_df.set_index("window_start")[["avg_delay_min"]].sort_index(),
-                height=250,
-            )
+            st.markdown("**Tendencia (últimas ventanas mostradas)**")
+            st.line_chart(agg_df.set_index("window_start")[["avg_delay_min"]].sort_index(), height=220)
     else:
         st.info("No se han encontrado agregados de retrasos con los filtros actuales.")
 
@@ -2008,72 +2226,411 @@ db.getSiblingDB("{MONGO_DB}").{MONGO_ANOMALIES_COLLECTION}.find(
     else:
         st.info("No se han encontrado anomalías para los filtros actuales.")
 
-    # Mapa de posiciones de vehículos por ventana de 15 minutos (vista agregada por almacén)
-    if agg_df is not None and not agg_df.empty and "window_start" in agg_df.columns:
-        st.markdown("---")
-        st.subheader("Posición agregada de vehículos por almacén y ventana (15 min)")
-        ventanas = sorted(agg_df["window_start"].dt.to_pydatetime())
-        if ventanas:
-            ventana_sel = st.selectbox(
-                "Selecciona una ventana de 15 minutos",
-                options=ventanas,
-                format_func=lambda dt: dt.strftime("%Y-%m-%d %H:%M"),
-            )
+    # Mongo disponible: leer incidencias; si no, modo demo (derivar de anomalías)
+    incidents: list[dict] = []
+    try:
+        inc_coll = db[MONGO_INCIDENTS_COLLECTION]
+        incidents = list(
+            inc_coll.find(
+                {"status": {"$in": ["nueva", "en_curso"]}},
+                {"_id": 0},
+            ).sort("created_at", -1).limit(50)
+        )
+    except Exception:
+        _ensure_demo_incidents_from_anomalies(anom_df)
+        incidents = get_store().get("incidents", [])
 
-            sel_mask = agg_df["window_start"] == ventana_sel
-            agg_win = agg_df[sel_mask].copy()
+    incidents_filtered = [
+        x for x in incidents if float(x.get("severity", 0) or 0) >= float(st.session_state.get("ct_min_sev", 0))
+    ]
 
-            if not agg_win.empty:
-                # Enriquecer con coordenadas de almacenes para pintarlos en el mapa
-                _, wh_df_map, _ = load_sample_data()
-                wh_df_override = st.session_state.get("warehouses_override_df")
-                if wh_df_override is not None:
-                    wh_df_map = wh_df_override
+    st.markdown("---")
+    st.subheader("Mapa operativo y panel de alertas")
+    map_col, alert_col = st.columns([1.5, 1])
 
-                if wh_df_map is not None and {"warehouse_id", "lat", "lon"}.issubset(
-                    wh_df_map.columns
-                ):
-                    merged = agg_win.merge(
-                        wh_df_map[["warehouse_id", "lat", "lon"]],
-                        on="warehouse_id",
-                        how="left",
-                    ).dropna(subset=["lat", "lon"])
-
-                    if not merged.empty:
-                        m = folium.Map(location=[40.0, -3.7], zoom_start=5, tiles="OpenStreetMap")
-                        for _, row in merged.iterrows():
-                            tooltip = (
-                                f"Almacén: {row['warehouse_id']}\n"
-                                f"Vehículos: {row.get('vehicle_count', 'N/A')}\n"
-                                f"Retraso medio: {row.get('avg_delay_min', 'N/A')} min\n"
-                                f"Retraso por vehículo: {row.get('delay_per_vehicle_min', 0):.1f} min"
-                            )
-                            folium.CircleMarker(
-                                location=[row["lat"], row["lon"]],
-                                radius=5
-                                + float(row.get("vehicle_count", 1)) * 0.3,  # más grande si hay más vehículos
-                                color="#FF8800" if row.get("avg_delay_min", 0) > 0 else "#00C846",
-                                fill=True,
-                                fill_opacity=0.9,
-                                tooltip=tooltip,
-                            ).add_to(m)
-
-                        st_folium(m, width=900, height=500)
+    with map_col:
+        if agg_df is not None and not agg_df.empty and "window_start" in agg_df.columns:
+            ventanas = sorted(agg_df["window_start"].dt.to_pydatetime())
+            if ventanas:
+                ventana_sel = st.selectbox(
+                    "Ventana 15 min",
+                    options=ventanas,
+                    format_func=lambda dt: dt.strftime("%Y-%m-%d %H:%M"),
+                    key="ct_map_ventana",
+                )
+                sel_mask = agg_df["window_start"] == ventana_sel
+                agg_win = agg_df[sel_mask].copy()
+                if not agg_win.empty:
+                    _, wh_df_map, _ = load_sample_data()
+                    wh_df_override = st.session_state.get("warehouses_override_df")
+                    if wh_df_override is not None:
+                        wh_df_map = wh_df_override
+                    if wh_df_map is not None and {"warehouse_id", "lat", "lon"}.issubset(wh_df_map.columns):
+                        merged = agg_win.merge(
+                            wh_df_map[["warehouse_id", "lat", "lon"]],
+                            on="warehouse_id",
+                            how="left",
+                        ).dropna(subset=["lat", "lon"])
+                        if not merged.empty:
+                            m = folium.Map(location=[40.0, -3.7], zoom_start=5, tiles="OpenStreetMap")
+                            for _, row in merged.iterrows():
+                                tooltip = (
+                                    f"Almacén: {row['warehouse_id']}\n"
+                                    f"Vehículos: {row.get('vehicle_count', 'N/A')}\n"
+                                    f"Retraso medio: {row.get('avg_delay_min', 'N/A')} min"
+                                )
+                                folium.CircleMarker(
+                                    location=[row["lat"], row["lon"]],
+                                    radius=5 + float(row.get("vehicle_count", 1)) * 0.3,
+                                    color="#FF8800" if row.get("avg_delay_min", 0) > 0 else "#00C846",
+                                    fill=True,
+                                    fill_opacity=0.9,
+                                    tooltip=tooltip,
+                                ).add_to(m)
+                            st_folium(m, width=None, height=420)
+                        else:
+                            st.info("Sin coordenadas para esta ventana.")
                     else:
-                        st.info(
-                            "No se puede mostrar el mapa porque no hay almacenes con coordenadas "
-                            "para esta ventana."
-                        )
-                else:
-                    st.info(
-                        "No se ha encontrado un `warehouses.csv` con columnas `warehouse_id`, `lat`, `lon` "
-                        "para poder posicionar los vehículos en el mapa."
-                    )
+                        st.info("Falta warehouses con lat/lon.")
+            else:
+                st.info("Sin ventanas en los datos.")
+        else:
+            st.info("Carga datos de retrasos para ver el mapa por ventana.")
+
+    with alert_col:
+        st.markdown("**Alertas activas**")
+        if incidents_filtered:
+            for inc in incidents_filtered[:15]:
+                inc_id = str(inc.get("incident_id", ""))
+                asignado = str(inc.get("asignado_a", "") or "—")
+                sev = inc.get("severity", 0)
+                wh = str(inc.get("warehouse_id", "") or "—")
+                st.markdown(
+                    f"`{inc_id}` · {wh} · {sev:.0f} min · **{asignado or '—'}**"
+                )
+            sel_id = st.selectbox(
+                "Abrir incidencia",
+                options=[str(x.get("incident_id")) for x in incidents_filtered],
+                key="ct_incident_select",
+            )
+            op_name = st.text_input(
+                "Operador (para Asignar a mí)",
+                value=str(st.session_state.get("operator_name", "admin")),
+                key="ct_operator_name",
+            )
+            if op_name:
+                st.session_state["operator_name"] = op_name
+            c_a, c_b = st.columns(2)
+            with c_a:
+                if st.button("Ver detalle →", key="ct_open_incident"):
+                    st.session_state["selected_incident_id"] = sel_id
+                    navigate_to("6.1 · Incidencias y decisiones")
+            with c_b:
+                if st.button("Asignar a mí", key="ct_assign_me"):
+                    target = next((x for x in incidents_filtered if str(x.get("incident_id")) == sel_id), None)
+                    if target:
+                        target["asignado_a"] = op_name or "admin"
+                        target["updated_at"] = _now_iso()
+                        upsert_incident(db=db, incident=target)
+                    st.success("Asignado.")
+        else:
+            st.info("No hay alertas activas.")
 
     # Zona de explotación administrativa (modo real con MongoDB)
     render_admin_actions(agg_df, anom_df)
 
     client.close()
+
+
+def page_incidencias_decisiones() -> None:
+    st.header("6.1 · Incidencias y decisiones (operación)")
+    render_top_nav("6.1 · Incidencias y decisiones")
+    render_search_highlight(
+        "aquí se gestionan **incidencias activas** y se registran **decisiones operativas** (ruta alternativa, escalado, etc.) con evidencias."
+    )
+
+    selected_id = str(st.session_state.get("selected_incident_id", "") or "")
+
+    db: pymongo.database.Database | None = None
+    try:
+        client = get_mongo_client()
+        client.admin.command("ping")
+        db = client[MONGO_DB]
+    except Exception:
+        db = None
+
+    incidents: list[dict]
+    decisions: list[dict]
+    if db is None:
+        store = get_store()
+        incidents = list(store.get("incidents", []))
+        decisions = list(store.get("decisions", []))
+    else:
+        incidents = list(db[MONGO_INCIDENTS_COLLECTION].find({}, {"_id": 0}).sort("created_at", -1).limit(200))
+        decisions = list(db[MONGO_DECISIONS_COLLECTION].find({}, {"_id": 0}).sort("created_at", -1).limit(500))
+
+    if not incidents:
+        st.info("No hay incidencias registradas todavía. Vuelve al Control Tower y genera/recibe alertas.")
+        return
+
+    options = [str(x.get("incident_id")) for x in incidents]
+    if selected_id and selected_id in options:
+        idx = options.index(selected_id)
+    else:
+        idx = 0
+        selected_id = options[0]
+
+    incident_id = st.selectbox("Selecciona incidencia", options=options, index=idx, key="inc_sel")
+    inc = next((x for x in incidents if str(x.get("incident_id")) == str(incident_id)), {})
+
+    c1, c2 = st.columns([1.2, 1])
+    with c1:
+        st.subheader("Detalle")
+        st.json(inc)
+    with c2:
+        st.subheader("Workflow")
+        asignado_a = st.text_input(
+            "Asignado a",
+            value=str(inc.get("asignado_a", "") or ""),
+            placeholder="Operador o equipo",
+            key="inc_asignado_a",
+        )
+        new_status = st.selectbox(
+            "Estado",
+            options=["nueva", "en_curso", "resuelta"],
+            index=["nueva", "en_curso", "resuelta"].index(str(inc.get("status", "nueva"))),
+            key="inc_status",
+        )
+        if st.button("Guardar estado", key="inc_save_status"):
+            inc["status"] = new_status
+            inc["asignado_a"] = asignado_a.strip()
+            inc["updated_at"] = _now_iso()
+            upsert_incident(db=db, incident=inc)
+            st.success("Estado actualizado.")
+
+    st.markdown("---")
+    st.subheader("Registrar decisión operativa")
+    col_d1, col_d2, col_d3 = st.columns([1.2, 1, 1])
+    with col_d1:
+        action = st.selectbox(
+            "Acción",
+            options=["Reasignar ruta", "Escalar incidencia", "Avisar a almacén", "Sin acción (monitorizar)"],
+            key="dec_action",
+        )
+        notes = st.text_area("Notas (qué se decide y por qué)", key="dec_notes", height=120)
+    with col_d2:
+        alt_route = st.text_input("Ruta alternativa sugerida (texto)", key="dec_alt_route")
+        est_minutes_saved = st.number_input("Minutos estimados ganados (+) o perdidos (-)", value=0, step=5, key="dec_min_delta")
+    with col_d3:
+        est_cost_delta = st.number_input("Impacto estimado (€)", value=0, step=50, key="dec_cost_delta")
+        operator = st.text_input("Operador", value=str(st.session_state.get("operator_name", "admin")), key="dec_operator")
+
+    if st.button("Aplicar/registrar decisión", key="dec_apply"):
+        decision = {
+            "decision_id": f"DEC-{incident_id}-{pd.Timestamp.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "created_at": _now_iso(),
+            "incident_id": incident_id,
+            "action": action,
+            "alt_route": alt_route,
+            "minutes_delta": float(est_minutes_saved),
+            "cost_delta_eur": float(est_cost_delta),
+            "operator": operator,
+            "notes": notes,
+        }
+        add_decision(db=db, decision=decision)
+        st.success("Decisión registrada.")
+
+    st.markdown("---")
+    st.subheader("Histórico de decisiones (descargable)")
+    dec_inc = [d for d in decisions if str(d.get("incident_id")) == str(incident_id)]
+    if dec_inc:
+        dec_df = pd.DataFrame(dec_inc)
+        st.dataframe(dec_df, hide_index=True)
+        st.download_button(
+            "Descargar decisiones (CSV)",
+            data=dec_df.to_csv(index=False).encode("utf-8"),
+            file_name=f"decisions_{incident_id}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("Aún no hay decisiones registradas para esta incidencia.")
+
+    if db is not None:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+
+def page_historico_sla() -> None:
+    st.header("6.2 · Histórico y SLA (mejora continua)")
+    render_top_nav("6.2 · Histórico y SLA")
+    render_search_highlight(
+        "aquí se consulta el **histórico** (preferentemente en Hive) para análisis semanal/mensual y cumplimiento de SLA."
+    )
+
+    st.markdown(
+        """
+        Esta vista está pensada para:
+
+        - **Tendencias** (semanal/mensual) por almacén y ruta.
+        - **Cumplimiento SLA** (por ejemplo: % ventanas con retraso medio < umbral).
+        - **Comparativas** vs periodo anterior.
+        """
+    )
+
+    umbral_sla = st.slider("Umbral SLA (min de retraso medio)", 5, 120, 30, 5, key="sla_threshold")
+    st.markdown("**Consulta recomendada en Hive (histórico)**")
+    st.code(
+        f"""USE transport;
+
+SELECT
+  warehouse_id,
+  AVG(avg_delay_min) AS retraso_medio_min,
+  SUM(CASE WHEN avg_delay_min < {umbral_sla} THEN 1 ELSE 0 END) / COUNT(1) AS pct_en_sla
+FROM aggregated_delays
+WHERE window_start >= date_sub(current_timestamp(), 7)
+GROUP BY warehouse_id
+ORDER BY retraso_medio_min DESC
+LIMIT 50;""",
+        language="sql",
+    )
+
+    st.info(
+        "En esta demo, el histórico completo depende de Hive. Si no está disponible, "
+        "puedes usar el Control Tower (Mongo) para operación diaria."
+    )
+
+
+def _iter_markdown_files(scope: str) -> list[Path]:
+    scopes: dict[str, list[Path]] = {
+        "docs (recomendado)": [PROJECT_ROOT / "docs"],
+        "ingest + nifi": [PROJECT_ROOT / "ingest"],
+        "hive + hdfs": [PROJECT_ROOT / "hive", PROJECT_ROOT / "hdfs"],
+        "repo completo": [PROJECT_ROOT],
+    }
+    roots = scopes.get(scope, [PROJECT_ROOT / "docs"])
+    files: list[Path] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        files.extend([p for p in root.rglob("*.md") if p.is_file()])
+    files = sorted(files, key=lambda p: (0 if str(p).startswith(str(PROJECT_ROOT / "docs")) else 1, str(p)))
+    return files
+
+
+def _score_doc_match(*, query_terms: list[str], path: Path, text: str) -> float:
+    if not query_terms:
+        return 0.0
+    rel = str(path.relative_to(PROJECT_ROOT)).lower()
+    text_l = text.lower()
+
+    score = 0.0
+    for t in query_terms:
+        if not t:
+            continue
+        if t in rel:
+            score += 12.0
+        cnt = text_l.count(t)
+        score += min(20.0, cnt * 1.5)
+
+    if all(t in text_l or t in rel for t in query_terms):
+        score += 8.0
+
+    if str(path).startswith(str(PROJECT_ROOT / "docs")):
+        score += 4.0
+    return score
+
+
+def page_documentacion_busqueda() -> None:
+    st.header("7 · Documentación (buscador tipo retrieval)")
+    render_top_nav("7 · Documentación (buscador)")
+    render_search_highlight(
+        "esta vista permite encontrar **rápido** el `.md` relevante (por ejemplo: Codespaces, Airflow, Kafka, Hive, Grafana…)."
+    )
+    st.markdown(
+        """
+        Este buscador funciona como la parte de **recuperación** de un RAG (retrieval):
+        busca en ficheros `.md` del repositorio y ordena por relevancia.
+        """
+    )
+
+    c1, c2, c3 = st.columns([1.6, 1, 1])
+    with c1:
+        query = st.text_input(
+            "Buscar en documentación",
+            placeholder="Ej: codespaces, airflow, kafka topics, hive, grafana…",
+            key="docs_query",
+        )
+    with c2:
+        scope = st.selectbox(
+            "Ámbito",
+            options=["docs (recomendado)", "ingest + nifi", "hive + hdfs", "repo completo"],
+            index=0,
+            key="docs_scope",
+        )
+    with c3:
+        max_results = st.number_input("Resultados", min_value=5, max_value=50, value=15, step=5, key="docs_max_results")
+
+    if not query.strip():
+        st.info("Escribe un término de búsqueda para localizar el `.md` más relevante.")
+        st.markdown("Sugerencia: también tienes un índice en `docs/README.md`.")
+        return
+
+    query_norm = re.sub(r"\s+", " ", query.strip().lower())
+    terms = [t for t in re.split(r"[\\s,;:/\\-]+", query_norm) if len(t) >= 3]
+    if not terms:
+        st.warning("La búsqueda es demasiado corta. Prueba con términos de 3+ caracteres.")
+        return
+
+    files = _iter_markdown_files(scope)
+    results: list[tuple[float, Path, str]] = []
+
+    for p in files:
+        try:
+            txt = p.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        score = _score_doc_match(query_terms=terms, path=p, text=txt)
+        if score <= 0:
+            continue
+        snippet = ""
+        for line in txt.splitlines():
+            l = line.strip()
+            if not l:
+                continue
+            ll = l.lower()
+            if any(t in ll for t in terms):
+                snippet = l[:240]
+                break
+        results.append((score, p, snippet))
+
+    if not results:
+        st.warning("No se encontraron coincidencias. Prueba con otros términos o cambia el ámbito.")
+        return
+
+    results = sorted(results, key=lambda x: x[0], reverse=True)[: int(max_results)]
+    st.markdown(f"**Top {len(results)} resultados** (ámbito: `{scope}`)")
+
+    for score, path, snippet in results:
+        rel = str(path.relative_to(PROJECT_ROOT))
+        with st.expander(f"{rel}  ·  score {score:.1f}", expanded=False):
+            if snippet:
+                st.markdown(f"**Snippet:** {snippet}")
+            try:
+                content = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception as exc:  # pragma: no cover - interactivo
+                st.error(f"No se pudo leer el fichero: {exc}")
+                continue
+            st.download_button(
+                "Descargar .md",
+                data=content.encode("utf-8"),
+                file_name=path.name,
+                mime="text/markdown",
+                key=f"dl_{rel}",
+            )
+            st.markdown("---")
+            st.markdown(content)
 
 
 def main():
@@ -2109,6 +2666,9 @@ def main():
             "4 · Fase III – Streaming + anomalías": "streaming retrasos ventanas aggregated_delays kafka alerts k-means anomaly_detection spark ml",
             "5 · Entorno visual (Superset / Grafana / Airflow)": "dashboards superset grafana airflow dags orquestacion kpi mariadb export",
             "6 · Dashboard (Retrasos / Anomalías)": "dashboard final retrasos anomalías consultas mongo hive informes top 5 mapa posiciones",
+            "6.1 · Incidencias y decisiones": "incidencias alertas decisiones workflow operador reasignar ruta escalar evidencias",
+            "6.2 · Histórico y SLA": "historico sla otif tendencias semanal mensual hive cumplimiento comparativas",
+            "7 · Documentación (buscador)": "documentacion docs markdown md buscar busqueda retrieval rag codespaces airflow kafka hive grafana superset",
         }
         for label, keywords in page_index.items():
             if term in keywords:
@@ -2139,6 +2699,9 @@ def main():
         "4 · Fase III – Streaming + anomalías": page_fase_iii_streaming_anomalias,
         "5 · Entorno visual (Superset / Grafana / Airflow)": page_entorno_visual,
         "6 · Dashboard (Retrasos / Anomalías)": page_dashboard_kpis,
+        "6.1 · Incidencias y decisiones": page_incidencias_decisiones,
+        "6.2 · Histórico y SLA": page_historico_sla,
+        "7 · Documentación (buscador)": page_documentacion_busqueda,
     }
 
     page_names = list(pages.keys())

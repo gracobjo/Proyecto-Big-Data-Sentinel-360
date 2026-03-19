@@ -61,15 +61,48 @@ def main(raw_path: str = None, output_path: str = None) -> None:
 
     for c in df.columns:
         df = df.withColumnRenamed(c, c.lower().replace(" ", "_"))
-    # Solo columnas esperadas en eventos GPS (evitar error si hay otros CSVs mezclados)
-    required = ["speed", "warehouse_id"]
-    if not all(c in df.columns for c in required):
-        raise ValueError(
-            f"El dataset no tiene las columnas esperadas {required}. "
-            f"Columnas encontradas: {df.columns}. "
-            "Asegúrate de que raw contiene gps_events.csv o gps_events.json."
-        )
+    # Normalizar nombres típicos de fuentes GPS (timestamp→ts, latitude→lat, longitude→lon)
+    if "timestamp" in df.columns and "ts" not in df.columns:
+        df = df.withColumnRenamed("timestamp", "ts")
+    if "latitude" in df.columns and "lat" not in df.columns:
+        df = df.withColumnRenamed("latitude", "lat")
+    if "longitude" in df.columns and "lon" not in df.columns:
+        df = df.withColumnRenamed("longitude", "lon")
+    # Campos obligatorios (R4): eliminar registros con nulos en vehicle_id, ts, lat, lon
+    required_obligatory = ["vehicle_id", "ts", "lat", "lon"]
+    for col_name in required_obligatory:
+        if col_name not in df.columns:
+            raise ValueError(
+                f"El dataset no tiene la columna obligatoria '{col_name}'. "
+                f"Columnas encontradas: {df.columns}."
+            )
+    before_dropna = df.count()
+    df = df.dropna(subset=required_obligatory)
+    dropped_nulls = before_dropna - df.count()
+    if dropped_nulls > 0:
+        print(f"[Limpieza] Descartados {dropped_nulls} registros con vehicle_id, ts, lat o lon nulos.")
+
+    # Columnas opcionales para velocidad y warehouse
+    if "speed" not in df.columns:
+        df = df.withColumn("speed", F.lit(0.0))
+    if "warehouse_id" not in df.columns:
+        df = df.withColumn("warehouse_id", F.lit("UNKNOWN"))
     df = df.fillna(0.0, subset=["speed"]).fillna("UNKNOWN", subset=["warehouse_id"])
+
+    # R4: descartar registros con velocidad < 0 o > 300 km/h y registrar en log
+    invalid_speed = (F.col("speed") < 0) | (F.col("speed") > 300)
+    discarded_speed = df.filter(invalid_speed)
+    n_discarded_speed = discarded_speed.count()
+    if n_discarded_speed > 0:
+        print(f"[Limpieza] Descartados {n_discarded_speed} registros con velocidad < 0 o > 300 km/h.")
+        try:
+            sample = discarded_speed.limit(5)
+            for row in sample.collect():
+                print(f"  Ejemplo descartado: vehicle_id={row.vehicle_id}, ts={row.ts}, speed={row.speed}")
+        except Exception:
+            pass
+    df = df.filter(~invalid_speed)
+
     df = (
         df.dropDuplicates(["event_id"])
         if "event_id" in df.columns
