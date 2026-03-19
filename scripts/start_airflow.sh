@@ -23,6 +23,15 @@ fi
 
 echo "=== Airflow (AIRFLOW_HOME=$AIRFLOW_HOME) ==="
 
+# Dag processor (Airflow 3: parsea los DAGs y los registra en la BD; sin esto la UI muestra "0 Dags")
+if pgrep -f "airflow dag.processor\|airflow dag_processor" >/dev/null 2>&1; then
+  echo "[OK] Dag processor ya en marcha"
+else
+  nohup airflow dag-processor -l "$PROJECT_ROOT/logs/airflow-dag-processor.log" >> "$PROJECT_ROOT/logs/airflow-dag-processor.log" 2>&1 &
+  sleep 2
+  pgrep -f "airflow dag" >/dev/null && echo "[OK] Dag processor arrancado" || echo "[?] Dag processor no arrancó"
+fi
+
 # Scheduler
 if pgrep -f "airflow scheduler" >/dev/null 2>&1; then
   echo "[OK] Scheduler ya en marcha"
@@ -45,4 +54,4 @@ fi
 
 echo ""
 echo "UI: http://localhost:$AIRFLOW_PORT  (o http://192.168.99.10:$AIRFLOW_PORT)"
-echo "DAGs Sentinel360: copiar/link airflow/*.py a \$AIRFLOW_HOME/dags o configurar dags_folder en airflow.cfg"
+echo "DAGs: si no ves los 8 DAGs, ejecuta una vez: airflow dag-processor -n 2"

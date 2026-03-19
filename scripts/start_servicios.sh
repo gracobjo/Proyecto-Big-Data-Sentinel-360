@@ -248,9 +248,12 @@ else
 fi
 
 # --- 7. NiFi (opcional) ---
+# nifi.sh start en segundo plano para que el script termine y Airflow no haga timeout
 if [ -d "$NIFI_HOME" ] && [ -x "$NIFI_HOME/bin/nifi.sh" ]; then
   "$NIFI_HOME/bin/nifi.sh" status 2>/dev/null | grep -q "Running" && log_ok "NiFi ya está en marcha" || {
-    "$NIFI_HOME/bin/nifi.sh" start 2>/dev/null && log_ok "NiFi arrancado" || log_warn "NiFi: $NIFI_HOME/bin/nifi.sh start"
+    ("$NIFI_HOME/bin/nifi.sh" start >> "$PROJECT_ROOT/logs/nifi-start.log" 2>&1 &)
+    sleep 3
+    "$NIFI_HOME/bin/nifi.sh" status 2>/dev/null | grep -q "Running" && log_ok "NiFi arrancado" || log_warn "NiFi: $NIFI_HOME/bin/nifi.sh start (ver logs/nifi-start.log)"
   }
 fi
 

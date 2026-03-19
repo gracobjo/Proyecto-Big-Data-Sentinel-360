@@ -19,13 +19,23 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def write_dag_run_report(*, config: Sentinel360ReportConfig, context: dict[str, Any]) -> str:
+def write_dag_run_report(
+    *,
+    config: Sentinel360ReportConfig,
+    context: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> str:
     """
     Genera un reporte Markdown (y un JSON simple) con el estado de la ejecución del DAG.
 
     Diseñado para ejecutarse como última tarea de un DAG (PythonOperator con provide_context).
     Devuelve la ruta del Markdown generado (string) para que aparezca en XCom/logs.
     """
+    # En Airflow, el contexto normalmente llega como kwargs separados (dag, dag_run, ti, ...),
+    # no como un diccionario bajo la clave "context". Para compatibilidad, aceptamos ambos.
+    if context is None:
+        context = kwargs
+
     dag = context.get("dag")
     dag_run = context.get("dag_run")
     ti = context.get("ti")

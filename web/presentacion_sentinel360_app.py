@@ -5,6 +5,11 @@ import heapq
 import re
 from pathlib import Path
 
+# Asegurar que el proyecto está en el path para importar config
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import pandas as pd
 import streamlit as st
 import folium
@@ -80,7 +85,9 @@ def load_sample_data():
 
     gps_df = pd.read_csv(gps_path) if gps_path.exists() else None
     wh_df = pd.read_csv(wh_path) if wh_path.exists() else None
-    routes_df = pd.read_csv(routes_path) if routes_path.exists() else None
+    routes_df = (
+        pd.read_csv(routes_path, comment="#") if routes_path.exists() else None
+    )
     return gps_df, wh_df, routes_df
 
 
@@ -544,11 +551,19 @@ def page_fase_i_ingesta():
         "Ver contenido de `scripts/preparar_ingesta_nifi.sh`",
     )
 
+    st.markdown(
+        "**Requisito:** tener el clúster levantado (HDFS, etc.). Si no, ve a **0 · Arranque de servicios** y pulsa *Arrancar servicios*."
+    )
     if st.button("Ejecutar comandos de Fase I"):
         with st.spinner("Ejecutando scripts de Fase I..."):
             output = run_command("./scripts/setup_hdfs.sh && ./scripts/preparar_ingesta_nifi.sh")
         st.subheader("Salida de los scripts")
         st.text(output)
+        if "Connection refused" in output or "No se puede conectar a HDFS" in output:
+            st.warning(
+                "HDFS no está disponible. Arranca antes los servicios desde la pestaña **0 · Arranque de servicios** "
+                "(botón *Arrancar servicios*) o ejecuta en terminal: `./scripts/start_servicios.sh`."
+            )
 
     st.subheader("Datos de ejemplo (data/sample)")
     gps_df, wh_df, routes_df = load_sample_data()
@@ -812,6 +827,96 @@ def page_fase_ii_grafos():
         """
     )
 
+    # --- Mapa de España con todos los almacenes y rutas (visible al entrar en la pestaña) ---
+    st.subheader("Mapa de España: almacenes y rutas (Sentinel360)")
+    st.markdown(
+        "Rutas del maestro (`routes.csv`) sobre mapa de España. "
+        "Cada marcador es un almacén; las líneas representan las rutas entre ellos (azul = rutas; rojo = ruta seleccionada más abajo)."
+    )
+    gps_df_map, wh_df_map, routes_df_map = load_sample_data()
+    wh_override = st.session_state.get("warehouses_override_df")
+    if wh_override is not None:
+        wh_df_map = wh_override
+    routes_override = st.session_state.get("routes_override_df")
+    if routes_override is not None:
+        routes_df_map = routes_override
+
+    if wh_df_map is not None and {"warehouse_id", "lat", "lon"}.issubset(wh_df_map.columns) and routes_df_map is not None and {"from_warehouse_id", "to_warehouse_id"}.issubset(routes_df_map.columns):
+        base_cols = ["warehouse_id", "lat", "lon"]
+        extra_cols = [c for c in ["name", "city"] if c in wh_df_map.columns]
+        wh_coords_map = wh_df_map[base_cols + extra_cols].dropna(subset=["lat", "lon"])
+        rutas_map = routes_df_map.dropna(subset=["from_warehouse_id", "to_warehouse_id"]).copy()
+        rutas_map["from_warehouse_id"] = rutas_map["from_warehouse_id"].astype(str)
+        rutas_map["to_warehouse_id"] = rutas_map["to_warehouse_id"].astype(str)
+        rutas_map = rutas_map[rutas_map["from_warehouse_id"].str.startswith("WH-") & rutas_map["to_warehouse_id"].str.startswith("WH-")]
+        merged_from = rutas_map.merge(wh_coords_map, left_on="from_warehouse_id", right_on="warehouse_id", how="left")
+        merged_full = merged_from.merge(wh_coords_map, left_on="to_warehouse_id", right_on="warehouse_id", how="left", suffixes=("_from", "_to"))
+        cols_line = ["from_warehouse_id", "to_warehouse_id", "lat_from", "lon_from", "lat_to", "lon_to"]
+        if "distance_km" in merged_full.columns:
+            cols_line.insert(2, "distance_km")
+        lines_map = merged_full[cols_line].dropna(subset=["lat_from", "lon_from", "lat_to", "lon_to"])
+
+        if not lines_map.empty:
+            m_espana = folium.Map(location=[40.0, -3.7], zoom_start=5, tiles="OpenStreetMap")
+            try:
+                folium.raster_layers.WmsTileLayer(
+                    url="https://www.ign.es/wms-inspire/mapa-raster",
+                    name="IGN Mapa Raster",
+                    fmt="image/png",
+                    transparent=True,
+                    version="1.3.0",
+                    layers="mtn_rasterizado",
+                    attr="© IGN España",
+                    control=True,
+                ).add_to(m_espana)
+            except Exception:
+                pass  # Si el WMS falla, el mapa sigue con OpenStreetMap
+            for _, row in wh_coords_map.iterrows():
+                parts = [str(row["warehouse_id"])]
+                if "city" in row and not pd.isna(row.get("city")):
+                    parts.append(str(row["city"]))
+                tooltip = " – ".join(parts)
+                folium.CircleMarker(
+                    location=[row["lat"], row["lon"]],
+                    radius=6,
+                    color="#0066CC",
+                    fill=True,
+                    fill_color="#0066CC",
+                    fill_opacity=0.9,
+                    tooltip=tooltip,
+                ).add_to(m_espana)
+            for _, row in lines_map.iterrows():
+                dist = row.get("distance_km") if "distance_km" in lines_map.columns else None
+                label = f"{row['from_warehouse_id']} → {row['to_warehouse_id']}"
+                if dist is not None and not pd.isna(dist):
+                    try:
+                        label += f" ({float(dist):.0f} km)"
+                    except (TypeError, ValueError):
+                        pass
+                folium.PolyLine(
+                    locations=[
+                        [float(row["lat_from"]), float(row["lon_from"])],
+                        [float(row["lat_to"]), float(row["lon_to"])],
+                    ],
+                    color="#0080FF",
+                    weight=2,
+                    opacity=0.6,
+                    tooltip=label,
+                ).add_to(m_espana)
+            folium.LayerControl().add_to(m_espana)
+            # Contenedor con altura fija para evitar espacio en blanco bajo el mapa (streamlit-folium)
+            try:
+                map_container = st.container(height=535, border=False)
+            except TypeError:
+                map_container = st.container()
+            with map_container:
+                st_folium(m_espana, use_container_width=True, height=500, key="mapa_espana_grafos")
+        else:
+            st.info("No se han podido dibujar rutas en el mapa (faltan coordenadas en algunos almacenes de las rutas).")
+    else:
+        st.info("Para ver el mapa hacen falta `warehouses.csv` (con warehouse_id, lat, lon) y `routes.csv` (con from_warehouse_id, to_warehouse_id).")
+
+    st.markdown("---")
     st.subheader("Comandos de esta fase")
     st.code(
         "./scripts/run_spark_submit.sh spark/graph/transport_graph.py\n"

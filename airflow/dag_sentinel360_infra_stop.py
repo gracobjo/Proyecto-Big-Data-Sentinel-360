@@ -4,7 +4,7 @@ Infra – Parar servicios del clúster Sentinel360.
 Equivalente a ./scripts/stop_servicios.sh. Solo ejecución manual (Trigger DAG).
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -18,9 +18,15 @@ except Exception:
 
 from sentinel360_reporting import Sentinel360ReportConfig, write_dag_run_report  # type: ignore
 
+COMMON_ENV = {
+    "HADOOP_HOME": "/usr/local/hadoop",
+    "HIVE_HOME": "/usr/local/hive",
+    "SPARK_HOME": "/usr/local/spark",
+}
+
 with DAG(
     dag_id="sentinel360_infra_stop",
-    default_args={"owner": "sentinel360", "retries": 0},
+    default_args={"owner": "sentinel360", "retries": 0, "execution_timeout": timedelta(minutes=5)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
@@ -29,7 +35,8 @@ with DAG(
 ) as dag:
     stop_all_services = BashOperator(
         task_id="stop_all_services",
-        bash_command=f"cd {PROJECT_DIR} && bash ./scripts/stop_servicios.sh",
+        bash_command=f"cd {PROJECT_DIR} && bash ./scripts/stop_servicios.sh ",
+        env=COMMON_ENV,
     )
 
     report = PythonOperator(

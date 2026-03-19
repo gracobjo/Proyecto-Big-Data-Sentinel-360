@@ -1,0 +1,46 @@
+{
+  "coord": {
+    "lon": -3.7036,
+    "lat": 40.4167
+  },
+  "weather": [
+    {
+      "id": 800,
+      "main": "Clear",
+      "description": "clear sky",
+      "icon": "01n"
+    }
+  ],
+  "base": "stations",
+  "main": {
+    "temp": 13.14,
+    "feels_like": 11.76,
+    "temp_min": 10.59,
+    "temp_max": 14.01,
+    "pressure": 1007,
+    "humidity": 48,
+    "sea_level": 1007,
+    "grnd_level": 934
+  },
+  "visibility": 10000,
+  "wind": {
+    "speed": 0,
+    "deg": 0
+  },
+  "clouds": {
+    "all": 0
+  },
+  "dt": 1773863201,
+  "sys": {
+    "type": 1,
+    "id": 6443,
+    "country": "ES",
+    "sunrise": 1773814915,
+    "sunset": 1773858239
+  },
+  "timezone": 3600,
+  "id": 6545083,
+  "name": "Sol",
+  "cod": 200,
+  "_ingested_at": "2026-03-18T19:50:34.745218+00:00"
+}

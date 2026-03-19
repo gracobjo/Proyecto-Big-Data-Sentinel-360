@@ -24,15 +24,17 @@ bash ./scripts/setup_airflow_dags.sh
 
 Eso deja en `airflow.cfg` la opción `dags_folder` apuntando a `airflow/` del proyecto, así Airflow carga los 8 DAGs agrupados por etapa KDD (infra, fase I/II/III, dashboards). Si prefieres no tocar la configuración y solo copiar los `.py` a `$AIRFLOW_HOME/dags`, usa: `bash ./scripts/setup_airflow_dags.sh --copy`.
 
-**Arrancar scheduler y API server (UI):**
+**Arrancar scheduler, dag-processor y API server (UI):**
 
 ```bash
 cd ~/Documentos/ProyectoBigData
 bash ./scripts/start_airflow.sh
 ```
 
+En **Airflow 3** el **dag-processor** es un proceso aparte que parsea los archivos de la carpeta `dags_folder` y los registra en la base de datos. Si no lo arrancas, la pestaña DAGs mostrará "0 Dags". El script `start_airflow.sh` ya arranca el dag-processor. Si tras levantar Airflow sigues sin ver DAGs, ejecuta una vez: `airflow dag-processor -n 2`.
+
 - **UI:** http://localhost:8080 (o http://192.168.99.10:8080). Si el puerto está ocupado: `AIRFLOW_PORT=8081 bash ./scripts/start_airflow.sh`
-- **Usuario por defecto:** admin / admin (si lo creaste así arriba).
+- **Usuario por defecto:** admin / admin (o la contraseña en `$AIRFLOW_HOME/simple_auth_manager_passwords.json.generated` si usas Simple auth manager).
 
 ---
 
@@ -42,6 +44,7 @@ Los DAGs están organizados por **fase del ciclo KDD** y por **infraestructura/d
 
 | DAG | Etapa | Descripción |
 |-----|-------|-------------|
+| **sentinel360_infra_mariadb_start** | Infra | Arrancar solo MariaDB/MySQL (XAMPP o systemd) y esperar puerto 3306. Ejecutar antes de *infra_start* si Hive Metastore falla por 3306. |
 | **sentinel360_infra_start** | Infra | Arrancar servicios: HDFS, YARN, Kafka, MongoDB, MariaDB, Hive, NiFi. |
 | **sentinel360_infra_stop** | Infra | Parar todos los servicios. |
 | **sentinel360_fase_i_ingesta** | Fase I – Ingesta | Crear temas Kafka → ingesta GPS sintética + OpenWeather (paralelo). Requiere variable `openweather_api_key`. |
@@ -88,7 +91,7 @@ Puedes cambiarla de dos formas:
 1. **Variable de Airflow** (recomendado): en la UI, Admin → Variables → crear `sentinel360_project_dir` con el valor `/ruta/real/al/proyecto`.
 2. **Editar el DAG**: en cada archivo `.py`, modificar la línea `PROJECT_DIR = ...` o el `default_var` dentro de `Variable.get(...)`.
 
-**Variable para OpenWeather:** el DAG **sentinel360_fase_i_ingesta** usa la tarea de OpenWeather; crea la variable **`openweather_api_key`** (sensitive) en Admin → Variables. **Opcional:** `sentinel360_streaming_mode` = `file` o `kafka` para el DAG de streaming.
+**Variable para OpenWeather:** el DAG **sentinel360_fase_i_ingesta** usa la tarea de OpenWeather; crea la variable **`openweather_api_key`** (sensitive) en Admin → Variables. **Opcional:** `sentinel360_streaming_mode` = `file` o `kafka` para el DAG de streaming. **Spark sin YARN:** por defecto los DAGs de Fase II y III usan Spark en modo local (`sentinel360_spark_use_local=true`); si YARN está en marcha y quieres usarlo, crea la variable `sentinel360_spark_use_local` = `false`.
 
 ---
 
@@ -97,9 +100,12 @@ Puedes cambiarla de dos formas:
 1. **Arrancar Airflow**
    - Inicializar la base de datos (solo la primera vez):
      - `airflow db init`
-   - Lanzar scheduler y webserver:
-     - `airflow scheduler`
-     - `airflow webserver -p 8080`
+   - Lanzar scheduler, dag-processor y UI (recomendado usar el script):
+     - `cd /ruta/al/ProyectoBigData && bash ./scripts/start_airflow.sh`
+   - O manualmente (Airflow 3.x):
+     - `airflow dag-processor -l /ruta/logs/dag-processor.log &`
+     - `airflow scheduler &`
+     - `airflow api-server -p 8080 &`
 
 2. **Carga automática de los DAGs**
    - Una vez que los ficheros `.py` estén en el `dags_folder` configurado:
@@ -137,12 +143,13 @@ Guía completa: `docs/GUIA_ARRANQUE_AIRFLOW.md`.
 
 ### 5. Orden sugerido de ejecución
 
-1. **sentinel360_infra_start** — Levantar servicios del clúster.
-2. **sentinel360_fase_i_ingesta** — Crear temas Kafka y cargar datos (GPS sintético + OpenWeather).
-3. **sentinel360_fase_ii_preprocesamiento** — Hive, limpieza, enriquecimiento y grafo.
-4. **sentinel360_fase_iii_batch** — Agregados, anomalías y KPIs a MariaDB; opcionalmente **sentinel360_fase_iii_streaming**.
-5. **sentinel360_dashboards_levantar** (opcional) — MariaDB + Superset + Grafana con Docker.
-6. **sentinel360_dashboards_exportar** — Exportar datos de MongoDB y Hive a MariaDB para Superset y Grafana (ejecutar con MariaDB y dashboards en marcha).
+1. **sentinel360_infra_mariadb_start** (opcional) — Si MariaDB no está en marcha y quieres que Hive Metastore arranque en el paso 2, ejecuta primero este DAG.
+2. **sentinel360_infra_start** — Levantar servicios del clúster.
+3. **sentinel360_fase_i_ingesta** — Crear temas Kafka y cargar datos (GPS sintético + OpenWeather).
+4. **sentinel360_fase_ii_preprocesamiento** — Hive, limpieza, enriquecimiento y grafo.
+5. **sentinel360_fase_iii_batch** — Agregados, anomalías y KPIs a MariaDB; opcionalmente **sentinel360_fase_iii_streaming**.
+6. **sentinel360_dashboards_levantar** (opcional) — MariaDB + Superset + Grafana con Docker.
+7. **sentinel360_dashboards_exportar** — Exportar datos de MongoDB y Hive a MariaDB para Superset y Grafana (ejecutar con MariaDB y dashboards en marcha).
 
 ---
 
@@ -153,4 +160,17 @@ Guía completa: `docs/GUIA_ARRANQUE_AIRFLOW.md`.
 - Ajusta la ruta del proyecto con la variable `sentinel360_project_dir` en Airflow o editando el `PROJECT_DIR` en los DAGs.
 
 Además, cada DAG termina con una tarea **`reporte_ejecucion`** que genera un reporte en `reports/airflow/<dag_id>/` para poder **descargar evidencias** de que el pipeline se ejecutó paso a paso.
+
+---
+
+### 7. Resolución de problemas
+
+- **"task instance finished with state failed, but the task instance's state attribute is queued"**  
+  Suele deberse a que la tarea tarda más de lo que el executor espera o el proceso termina de forma inesperada. Los DAGs de Sentinel360 ya llevan `execution_timeout` (10 min para infra_start, 5 para infra_stop, 15–60 min para el resto). Si sigue fallando, revisa los logs de la tarea en la UI (click en la tarea → Log) o en `$AIRFLOW_HOME/logs/dag_id=.../`.
+
+- **"Puerto 3306 no respondió" / "Omitiendo Hive Metastore"**  
+  Ejecuta primero el DAG **sentinel360_infra_mariadb_start**: arranca MariaDB/MySQL (XAMPP o systemd) y espera a que el puerto 3306 esté listo. Cuando termine en verde, lanza **sentinel360_infra_start**. Requiere que el usuario del worker pueda ejecutar `sudo lampp startmysql` o `sudo systemctl start mariadb` sin contraseña.
+
+- **Tareas de infra (start/stop) que fallan en el worker**  
+  Los DAGs `sentinel360_infra_start` y `sentinel360_infra_stop` pasan variables de entorno (`HADOOP_HOME`, `HIVE_HOME`, `SPARK_HOME`) al BashOperator para que el script encuentre los servicios aunque el worker no tenga el mismo entorno que tu sesión. Si tus rutas son otras, edita `COMMON_ENV` en el `.py` del DAG.
 

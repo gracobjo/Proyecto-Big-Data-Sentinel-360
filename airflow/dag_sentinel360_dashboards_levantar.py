@@ -4,7 +4,7 @@ Dashboards – Levantar MariaDB, Superset y Grafana con Docker.
 Requiere Docker en el nodo donde corre el worker. Puertos: MariaDB 3307, Superset 8089, Grafana 3000.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -22,7 +22,7 @@ DOCKER_DIR = f"{PROJECT_DIR}/docker"
 
 with DAG(
     dag_id="sentinel360_dashboards_levantar",
-    default_args={"owner": "sentinel360", "retries": 0},
+    default_args={"owner": "sentinel360", "retries": 0, "execution_timeout": timedelta(minutes=5)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
@@ -31,15 +31,15 @@ with DAG(
 ) as dag:
     up_mariadb = BashOperator(
         task_id="docker_mariadb",
-        bash_command=f"cd {DOCKER_DIR} && docker compose up -d mariadb",
+        bash_command=f"cd {DOCKER_DIR} && docker compose up -d mariadb ",
     )
     up_superset = BashOperator(
         task_id="docker_superset",
-        bash_command=f"cd {DOCKER_DIR} && docker compose up -d superset",
+        bash_command=f"cd {DOCKER_DIR} && docker compose up -d superset ",
     )
     up_grafana = BashOperator(
         task_id="docker_grafana",
-        bash_command=f"cd {DOCKER_DIR} && docker compose up -d grafana",
+        bash_command=f"cd {DOCKER_DIR} && docker compose up -d grafana ",
     )
     up_mariadb >> up_superset
     up_mariadb >> up_grafana

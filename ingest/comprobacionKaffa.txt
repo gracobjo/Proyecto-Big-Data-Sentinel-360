@@ -1,0 +1,5 @@
+# raw-data
+./bin/kafka-console-consumer.sh --bootstrap-server 192.168.99.10:9092 --topic raw-data --from-beginning --max-messages 5 --timeout-ms 5000
+
+# filtered-data  
+./bin/kafka-console-consumer.sh --bootstrap-server 192.168.99.10:9092 --topic filtered-data --from-beginning --max-messages 5 --timeout-ms 5000

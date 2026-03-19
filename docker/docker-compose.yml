@@ -11,7 +11,7 @@ services:
       MYSQL_USER: sentinel
       MYSQL_PASSWORD: sentinel_password
     ports:
-      - "3307:3306"   # 3307 en host para no chocar con MySQL/MariaDB del host; Grafana usa red interna (mariadb:3306)
+      - "3306:3306"   # exponer 3306 en host para Hive/metastore y scripts (si no hay MySQL/MariaDB del host)
     volumes:
       - mariadb_data:/var/lib/mysql
       # Asegura usuario sentinel@'%' y BD (solo se ejecuta si el volumen está vacío)

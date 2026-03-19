@@ -62,8 +62,10 @@ done
 [ -n "$EXTRA_JARS" ] && SPARK_JARS="--jars $EXTRA_JARS" || SPARK_JARS=""
 
 # Modo local: sin YARN, todo en la máquina actual (evita fallos por disco lleno en nodos).
+# Exportar SPARK_MASTER para que config.py y los scripts Python usen local en lugar de yarn.
 if [ -n "$USE_LOCAL" ]; then
   echo "[run_spark_submit] Modo local (--local): sin YARN, ejecución en esta máquina."
+  export SPARK_MASTER="local[*]"
   "${SPARK_HOME}/bin/spark-submit" \
     --master "local[*]" \
     $SPARK_JARS \

@@ -38,8 +38,8 @@ KAFKA_TOPIC_FILTERED = "filtered-data"
 KAFKA_TOPIC_GPS_EVENTS = "gps-events"   # opcional: simulador y consumidores de demo
 KAFKA_TOPIC_ALERTS = "alerts"           # opcional: alertas de anomalías (batch y streaming)
 
-# Spark / YARN (modo distribuido)
-SPARK_MASTER = "yarn"
+# Spark: por defecto YARN; si SPARK_MASTER está en el entorno (p. ej. run_spark_submit.sh --local), se usa ese valor
+SPARK_MASTER = os.environ.get("SPARK_MASTER", "yarn")
 SPARK_DEPLOY_MODE = "client"
 # ResourceManager para configuración Hadoop (Web UI: http://192.168.99.10:8088)
 YARN_RESOURCE_MANAGER_HOST = MASTER_IP

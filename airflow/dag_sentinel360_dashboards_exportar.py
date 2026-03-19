@@ -23,7 +23,7 @@ from sentinel360_reporting import Sentinel360ReportConfig, write_dag_run_report 
 
 with DAG(
     dag_id="sentinel360_dashboards_exportar",
-    default_args={"owner": "sentinel360", "retries": 1, "retry_delay": timedelta(minutes=3)},
+    default_args={"owner": "sentinel360", "retries": 1, "retry_delay": timedelta(minutes=3), "execution_timeout": timedelta(minutes=15)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
@@ -32,11 +32,11 @@ with DAG(
 ) as dag:
     export_mongo = BashOperator(
         task_id="export_mongo_to_mariadb",
-        bash_command=f"cd {PROJECT_DIR} && python3 scripts/mongo_to_mariadb_kpi.py --source mongo --export-anomalies",
+        bash_command=f"cd {PROJECT_DIR} && python3 scripts/mongo_to_mariadb_kpi.py --source mongo --export-anomalies ",
     )
     export_hive = BashOperator(
         task_id="export_hive_to_mariadb",
-        bash_command=f"cd {PROJECT_DIR} && python3 scripts/export_hive_to_mariadb.py --dias 7",
+        bash_command=f"cd {PROJECT_DIR} && python3 scripts/export_hive_to_mariadb.py --dias 7 ",
     )
 
     report = PythonOperator(

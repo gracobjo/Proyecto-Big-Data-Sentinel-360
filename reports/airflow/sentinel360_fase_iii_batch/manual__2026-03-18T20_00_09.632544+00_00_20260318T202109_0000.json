@@ -1,0 +1,10 @@
+{
+  "generated_at_utc": "2026-03-18T20:21:09+00:00",
+  "dag_id": "sentinel360_fase_iii_batch",
+  "run_id": "manual__2026-03-18T20:00:09.632544+00:00",
+  "logical_date": "",
+  "start_date": "2026-03-18T20:12:24+00:00",
+  "end_date": "",
+  "state": "running",
+  "tasks": []
+}

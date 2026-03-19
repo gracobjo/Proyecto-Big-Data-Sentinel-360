@@ -1,0 +1,10 @@
+{
+  "generated_at_utc": "2026-03-18T19:31:30+00:00",
+  "dag_id": "sentinel360_fase_i_ingesta",
+  "run_id": "manual__2026-03-18T19:30:59.852004+00:00",
+  "logical_date": "",
+  "start_date": "2026-03-18T19:31:00+00:00",
+  "end_date": "",
+  "state": "running",
+  "tasks": []
+}
