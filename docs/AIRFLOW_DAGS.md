@@ -174,3 +174,10 @@ Además, cada DAG termina con una tarea **`reporte_ejecucion`** que genera un re
 - **Tareas de infra (start/stop) que fallan en el worker**  
   Los DAGs `sentinel360_infra_start` y `sentinel360_infra_stop` pasan variables de entorno (`HADOOP_HOME`, `HIVE_HOME`, `SPARK_HOME`) al BashOperator para que el script encuentre los servicios aunque el worker no tenga el mismo entorno que tu sesión. Si tus rutas son otras, edita `COMMON_ENV` en el `.py` del DAG.
 
+- **Fase II falla por YARN inestable (Connection refused al driver / reinicios del equipo)**  
+  Ejecuta Fase II en local para estabilizar la demo: `./scripts/run_spark_submit.sh --local spark/cleaning/clean_and_normalize.py` y `./scripts/run_spark_submit.sh --local spark/cleaning/enrich_with_hive.py`.  
+  En la UI de Streamlit, activa perfil **Seguro (evitar reinicios)** en Fase II para forzar local y reducir memoria/cores.
+
+- **Cómo validar éxito real de Fase II**  
+  Revisa `reports/airflow/sentinel360_fase_II_preprocesamiento/LATEST.md` (o variante `fase_ii`), y confirma en HDFS que existan `cleaned`/`enriched` con `_SUCCESS` y ficheros Parquet. Como evidencia operativa extra, consulta `reports/logs/`.
+

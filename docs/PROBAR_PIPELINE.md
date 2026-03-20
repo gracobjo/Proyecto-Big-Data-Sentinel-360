@@ -18,6 +18,32 @@ Equivalente con la forma corta: `-l` en lugar de `--local`. Cuando liberes espac
 
 ---
 
+## Validar éxito de Fase II (Airflow + HDFS + logs)
+
+Tras ejecutar la limpieza/enriquecimiento, usa esta comprobación rápida para confirmar evidencia técnica:
+
+```bash
+# 1) Reporte de Airflow (acepta ambas variantes del dag_id)
+sed -n '1,80p' reports/airflow/sentinel360_fase_II_preprocesamiento/LATEST.md 2>/dev/null || \
+sed -n '1,80p' reports/airflow/sentinel360_fase_ii_preprocesamiento/LATEST.md
+
+# 2) Salidas de Spark en HDFS
+hdfs dfs -ls /user/hadoop/proyecto/procesado/cleaned
+hdfs dfs -ls /user/hadoop/proyecto/procesado/enriched
+hdfs dfs -du -h /user/hadoop/proyecto/procesado/cleaned
+hdfs dfs -du -h /user/hadoop/proyecto/procesado/enriched
+
+# 3) Logs locales recientes
+ls -lt reports/logs 2>/dev/null | head -8
+```
+
+Interpretación recomendada:
+- Si ves `_SUCCESS` y ficheros `part-*.parquet` en `cleaned` y `enriched`, la Fase II escribió datos correctamente.
+- Si `LATEST.md` aparece con estado antiguo o `running`, prioriza el estado de HDFS para confirmar éxito real.
+- Los logs en `reports/logs/` sirven como respaldo operativo adicional.
+
+---
+
 ## Errores frecuentes al ejecutar Spark en YARN
 
 - **PYTHON_VERSION_MISMATCH** (driver 3.13, worker 3.12): PySpark exige la misma versión menor en driver y workers. El script `run_spark_submit.sh` intenta fijar `PYSPARK_PYTHON` y `PYSPARK_DRIVER_PYTHON` a la misma (p. ej. `python3.12`). Si sigue fallando, ejecuta antes: `export PYSPARK_DRIVER_PYTHON=python3.12` y `export PYSPARK_PYTHON=python3.12` (o la versión que tengan los nodos workers).

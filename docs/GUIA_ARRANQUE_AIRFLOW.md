@@ -160,3 +160,33 @@ Se guarda en:
 
 Así puedes **descargar/adjuntar** el reporte en la memoria o como evidencia de ejecución paso a paso.
 
+---
+
+### 10) Validación operativa recomendada para Fase II
+
+Cuando ejecutes `sentinel360_fase_II_preprocesamiento`, valida el éxito técnico en este orden:
+
+1. **Airflow reportes**
+   - `reports/airflow/sentinel360_fase_II_preprocesamiento/LATEST.md`
+   - (compatibilidad) `reports/airflow/sentinel360_fase_ii_preprocesamiento/LATEST.md`
+2. **HDFS procesado**
+   - `/user/hadoop/proyecto/procesado/cleaned`
+   - `/user/hadoop/proyecto/procesado/enriched`
+3. **Logs locales**
+   - `reports/logs/` (si guardaste ejecuciones Spark manuales)
+
+Comandos útiles:
+
+```bash
+sed -n '1,80p' reports/airflow/sentinel360_fase_II_preprocesamiento/LATEST.md 2>/dev/null || \
+sed -n '1,80p' reports/airflow/sentinel360_fase_ii_preprocesamiento/LATEST.md
+
+hdfs dfs -ls /user/hadoop/proyecto/procesado/cleaned
+hdfs dfs -ls /user/hadoop/proyecto/procesado/enriched
+hdfs dfs -du -h /user/hadoop/proyecto/procesado/cleaned
+hdfs dfs -du -h /user/hadoop/proyecto/procesado/enriched
+
+ls -lt reports/logs 2>/dev/null | head -8
+```
+
+Si en HDFS aparecen `_SUCCESS` y `part-*.parquet`, considera la fase validada aunque Airflow muestre algún run histórico en estado inconsistente.
