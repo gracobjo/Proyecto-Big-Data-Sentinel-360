@@ -2297,6 +2297,61 @@ def page_fase_iii_streaming_anomalias():
     if not yarn_up:
         st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
 
+    st.subheader("Monitorización en vivo (Spark UI / YARN / Kafka)")
+    st.markdown(
+        """
+        Durante la ejecución de streaming puedes revisar:
+
+        - **Spark UI**: progreso de jobs/stages y métricas de la consulta activa.
+        - **YARN UI**: aplicaciones en ejecución, estado y logs de contenedores.
+        - **Kafka topics**: presencia/configuración de `raw-data`, `filtered-data` y `alerts`.
+        """
+    )
+    st.markdown(
+        "\n".join(
+            [
+                "- [Spark UI (local)](http://localhost:4040)",
+                "- [Spark UI (nodo hadoop)](http://hadoop:4040)",
+                "- [YARN ResourceManager UI](http://hadoop:8088)",
+            ]
+        )
+    )
+    st.code(
+        "kafka-topics.sh --bootstrap-server hadoop:9092 --list\n"
+        "kafka-topics.sh --bootstrap-server hadoop:9092 --describe --topic raw-data\n"
+        "kafka-topics.sh --bootstrap-server hadoop:9092 --describe --topic filtered-data\n"
+        "kafka-topics.sh --bootstrap-server hadoop:9092 --describe --topic alerts\n",
+        language="bash",
+    )
+    if st.button("Comprobar monitorización Spark/YARN/Kafka", key="fase3_live_monitor_check"):
+        with st.spinner("Comprobando UIs, puertos y topics..."):
+            monitor_cmd = (
+                'echo "=== Puertos de monitorización ==="; '
+                "ss -tln 2>/dev/null | awk '/:4040|:8088|:9092/ {print}'; "
+                'echo ""; echo "=== Spark UI (localhost:4040) ==="; '
+                "curl -sS --max-time 2 http://localhost:4040 2>/dev/null | sed -n '1,5p' || echo 'No accesible'; "
+                'echo ""; echo "=== YARN UI (hadoop:8088) ==="; '
+                "curl -sS --max-time 2 http://hadoop:8088/ws/v1/cluster/info 2>/dev/null | sed -n '1,20p' || echo 'No accesible'; "
+                'echo ""; echo "=== Kafka topics (list) ==="; '
+                "(kafka-topics.sh --bootstrap-server hadoop:9092 --list 2>/dev/null "
+                "|| /usr/local/kafka/bin/kafka-topics.sh --bootstrap-server hadoop:9092 --list 2>/dev/null "
+                "|| echo 'No se pudo ejecutar kafka-topics.sh') | sort; "
+                'echo ""; echo "=== Kafka describe (raw-data, filtered-data, alerts) ==="; '
+                "for t in raw-data filtered-data alerts; do "
+                "echo \"-- $t --\"; "
+                "(kafka-topics.sh --bootstrap-server hadoop:9092 --describe --topic \"$t\" 2>/dev/null "
+                "|| /usr/local/kafka/bin/kafka-topics.sh --bootstrap-server hadoop:9092 --describe --topic \"$t\" 2>/dev/null "
+                "|| echo 'No disponible'); "
+                "done"
+            )
+            monitor_output = run_command(monitor_cmd)
+        render_log_output(
+            "Resultado monitorización en vivo (Fase III)",
+            monitor_output,
+            key="log_fase_iii_live_monitor",
+            download_name="fase_iii_monitorizacion_vivo.log.txt",
+        )
+
     if st.button("Lanzar streaming de retrasos"):
         with st.spinner("Lanzando Spark Streaming (delays_windowed.py)..."):
             output = run_command(

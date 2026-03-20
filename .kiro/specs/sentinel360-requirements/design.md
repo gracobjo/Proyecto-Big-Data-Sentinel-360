@@ -132,6 +132,8 @@ Para entornos de demostración, `docker/docker-compose.yml` levanta MariaDB, Sup
 
 **Script alternativo** `scripts/ingest_openweather.py`: permite la ingesta meteorológica sin depender del flujo NiFi, útil en entornos donde NiFi no está disponible.
 
+**Robustez de Fase I en Airflow**: la tarea de ingesta meteorológica en el DAG de Fase I opera en modo degradado cuando no existe `openweather_api_key` en Variables de Airflow. En ese caso registra el aviso y no bloquea el resto de la ingesta (GPS sintética y validaciones técnicas).
+
 **Simulador GPS** `scripts/gps_simulator.py`: genera eventos GPS sintéticos con campos `vehicle_id`, `route_id`, `lat`, `lon`, `speed`, `delay_minutes`, `timestamp` y los publica en el topic Kafka `gps-events` a razón de un evento por segundo.
 
 **Generador sintético** `data/sample/generate_synthetic_gps.py`: genera ficheros CSV y JSON Lines a partir de los maestros `warehouses.csv` y `routes.csv`.
@@ -144,7 +146,7 @@ Para entornos de demostración, `docker/docker-compose.yml` levanta MariaDB, Sup
 
 ### Fase II – Preprocesamiento (`spark/cleaning/`, `spark/graph/`)
 
-**`clean_and_normalize.py`**: job Spark sobre YARN que lee desde HDFS raw, normaliza nombres de columnas a minúsculas, rellena nulos (`speed → 0.0`, `warehouse_id → "UNKNOWN"`), elimina duplicados por `event_id` (o por `vehicle_id + ts`), convierte `ts` a timestamp y escribe en Parquet en `/procesado/cleaned/`.
+**`clean_and_normalize.py`**: job Spark que lee desde HDFS raw, normaliza nombres de columnas a minúsculas, rellena nulos (`speed → 0.0`, `warehouse_id → "UNKNOWN"`), elimina duplicados por `event_id` (o por `vehicle_id + ts`), convierte `ts` a timestamp y escribe en Parquet en `/procesado/cleaned/`. Puede ejecutarse en YARN o en modo local (`--local`) según disponibilidad del clúster.
 
 **`enrich_with_hive.py`**: job Spark que realiza un left join entre los eventos limpios y la tabla Hive `transport.warehouses` por `warehouse_id`, añadiendo `warehouse_name` y `warehouse_city`. Escribe en Parquet en `/procesado/enriched/`.
 
@@ -153,6 +155,8 @@ Para entornos de demostración, `docker/docker-compose.yml` levanta MariaDB, Sup
 ### Fase III – Minería (`spark/streaming/`, `spark/ml/`)
 
 **`delays_windowed.py`**: job Spark Structured Streaming que consume desde Kafka `raw-data` o desde ficheros CSV en HDFS raw. Aplica watermark de 10 minutos sobre `ts`, agrupa por ventanas de 15 minutos y `warehouse_id`, calcula `avg_delay_min` y `vehicle_count`. Por cada micro-batch escribe en Hive `transport.aggregated_delays` (append) y en MongoDB `transport.aggregated_delays`. Si `avg_delay_min > 20`, publica una alerta `ANOMALY_STREAMING` en Kafka `alerts`. El checkpoint se persiste en HDFS.
+
+**Monitorización en vivo de Fase III**: durante la ejecución de streaming se habilita acceso a Spark UI (jobs/stages/structured streaming), YARN UI (estado de aplicaciones) y verificación de topics Kafka (`raw-data`, `filtered-data`, `alerts`) para diagnóstico operativo en tiempo real.
 
 **`write_to_hive_and_mongo.py`**: job Spark batch que lee Parquet de `/procesado/aggregated_delays/` y lo vuelca en Hive `transport.aggregated_delays` en modo append. Usado en el DAG de Fase III batch.
 
@@ -168,7 +172,7 @@ Para entornos de demostración, `docker/docker-compose.yml` levanta MariaDB, Sup
 
 **Apache Superset**: conectado a MariaDB `sentinel360_analytics`. Permite filtrar por almacén, rango de fechas y franja horaria. Accesible en `http://localhost:8089`.
 
-**Streamlit** (`web/presentacion_sentinel360_app.py`): interfaz web con 7+ secciones navegables que recorre el ciclo KDD, permite cargar ficheros, muestra un mapa interactivo de almacenes y visualiza agregados y anomalías desde MongoDB.
+**Streamlit** (`web/presentacion_sentinel360_app.py`): interfaz web con 7+ secciones navegables que recorre el ciclo KDD, permite cargar ficheros, muestra un mapa interactivo de almacenes y visualiza agregados y anomalías desde MongoDB. Incluye ejecución con logs en vivo (scroll + descarga), perfil de recursos "Seguro" para Fase II, bloque de validación operativa "Airflow + HDFS" y validaciones técnicas de Fase I (Airflow/HDFS/Kafka/OpenWeather).
 
 **`scripts/alerts_consumer.py`**: consumer Kafka del topic `alerts` que muestra cada alerta por consola con tipo, almacén, ventana temporal y retraso medio.
 
@@ -481,6 +485,41 @@ Cada fase KDD tiene su propio DAG en Airflow, lo que permite ejecutarlas de form
 ### 7. Checkpoint de Streaming en HDFS
 
 El checkpoint del Structured Streaming se persiste en HDFS (no en disco local) para garantizar la recuperación ante reinicios del job en cualquier nodo del clúster YARN, sin pérdida ni duplicación de datos.
+
+### 8. Modo Degradado para Fase II (estabilidad demo)
+
+En entornos de laboratorio con YARN inestable (por ejemplo, errores de conexión al driver o reinicios del host), Fase II puede ejecutarse en modo local con recursos reducidos. Esta decisión prioriza continuidad operativa y verificabilidad de resultados sobre throughput máximo.
+
+Implicaciones:
+1. El script `run_spark_submit.sh` acepta `--local` para evitar dependencias del ResourceManager/NodeManagers.
+2. La UI de Streamlit expone un perfil "Seguro (evitar reinicios)" que fuerza local y limita memoria/cores.
+3. La validación de éxito se basa en evidencia de escritura en HDFS (`cleaned`/`enriched`) y reportes Airflow, no solo en el estado superficial de una ejecución histórica.
+
+### 9. Validación Operativa Basada en Evidencias
+
+Para cerrar una ejecución de Fase II, el diseño adopta una comprobación cruzada:
+- `reports/airflow/sentinel360_fase_II_preprocesamiento/LATEST.md` (o variante `fase_ii`) como evidencia de orquestación.
+- `hdfs dfs -ls` y `hdfs dfs -du -h` sobre `/user/hadoop/proyecto/procesado/cleaned` y `/user/hadoop/proyecto/procesado/enriched` como evidencia de datos producidos.
+- `reports/logs/` como respaldo de logs manuales y troubleshooting.
+
+Esta estrategia reduce falsos negativos cuando Airflow conserva runs antiguos en estado inconsistente, pero los artefactos de datos sí se han generado correctamente.
+
+### 10. Priorización de Datos Reales frente a Datos Demo
+
+La capa de presentación prioriza evidencia real del pipeline sobre muestras estáticas. En Fase I, cuando existen reportes actualizados y/o ficheros meteorológicos recientes, la UI oculta bloques de ejemplo para evitar interpretación ambigua de resultados.
+
+Beneficios:
+1. Reduce errores de lectura durante defensa/demo.
+2. Hace trazable el estado real de ingesta.
+3. Evita mezclar evidencias de laboratorio con datos históricos de ejemplo.
+
+### 11. Acceso operativo a UIs técnicas por fase
+
+- **Fase II/Fase III (Spark)**: acceso a Spark UI para revisar jobs, stages, SQL y progreso de micro-batches.
+- **Fase II/Fase III (cluster)**: acceso a YARN UI para inspeccionar estado de aplicaciones y logs de contenedor.
+- **Fase I/Fase III (Kafka)**: comandos de consulta de topics para validar flujo de eventos y alertas.
+
+La interfaz de Streamlit expone estos accesos en la fase correspondiente para acortar el tiempo de diagnóstico durante demos y operación.
 
 
 ---

@@ -55,6 +55,7 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 3. WHEN NiFi procesa un fichero GPS, THE NiFi SHALL escribir una copia inmutable del fichero en la ruta HDFS `/user/hadoop/proyecto/raw/`.
 4. IF el directorio de entrada de NiFi no contiene ficheros, THEN THE NiFi SHALL permanecer en espera activa y reintentar la lectura cada 5 segundos.
 5. THE Sistema SHALL soportar ficheros GPS en formato JSON (JSON Lines) y CSV con los campos: `event_id`, `vehicle_id`, `ts`, `lat`, `lon`, `speed`, `warehouse_id`.
+6. THE Streamlit SHALL exponer en Fase I una validación técnica de ingesta (Airflow/HDFS/Kafka) ejecutable desde la interfaz, mostrando la salida en terminal embebido con scroll.
 
 ---
 
@@ -67,6 +68,8 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 1. WHEN el flujo NiFi de OpenWeather está activo, THE NiFi SHALL invocar la API OpenWeather mediante HTTP y publicar la respuesta en el topic Kafka `raw-data`.
 2. IF la API OpenWeather no está disponible, THEN THE Sistema SHALL registrar el error y continuar la operación sin interrumpir la ingesta GPS.
 3. WHERE el script alternativo `ingest_openweather.py` esté configurado, THE Sistema SHALL permitir la ingesta meteorológica sin depender del flujo NiFi.
+4. IF la variable Airflow `openweather_api_key` no está definida, THEN la tarea meteorológica de Fase I SHALL registrarlo y finalizar en modo degradado sin bloquear el DAG completo.
+5. THE Streamlit SHALL permitir introducir/usar API key de OpenWeather para pruebas manuales desde la UI de Fase I.
 
 ---
 
@@ -92,7 +95,8 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 1. WHEN el job `clean_and_normalize.py` se ejecuta, THE Spark SHALL leer los eventos desde HDFS raw, eliminar registros con campos obligatorios nulos (`vehicle_id`, `ts`, `lat`, `lon`) y escribir el resultado en formato Parquet en `/user/hadoop/proyecto/procesado/cleaned/`.
 2. THE Spark SHALL normalizar el campo `ts` al tipo timestamp ISO 8601 durante la limpieza.
 3. IF un evento GPS contiene un valor de velocidad negativo o superior a 300 km/h, THEN THE Spark SHALL descartar el registro y registrar el evento en el log de ejecución.
-4. THE Spark SHALL ejecutar los jobs de limpieza en modo distribuido sobre YARN con al menos 2 ejecutores.
+4. THE Spark SHALL soportar ejecución de los jobs de limpieza en dos modos: distribuido sobre YARN y local (`--local`) para operación degradada en entornos inestables.
+5. WHEN el perfil de recursos "Seguro (evitar reinicios)" esté activo en la interfaz Streamlit, THE Sistema SHALL forzar la ejecución de Fase II en modo local con parámetros reducidos de CPU/memoria para priorizar estabilidad.
 
 ---
 
@@ -136,6 +140,7 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 6. THE Sistema SHALL persistir el Checkpoint del streaming en la ruta HDFS configurada en `config.py` para permitir la reanudación sin duplicados.
 7. IF MongoDB no está disponible, THEN THE Spark SHALL continuar el streaming escribiendo únicamente en Hive sin interrumpir el procesamiento.
 8. THE Sistema SHALL soportar dos modos de entrada para el streaming: `kafka` (desde el topic `raw-data`) y `file` (desde ficheros CSV en HDFS raw).
+9. THE Sistema SHALL proporcionar acceso operativo a la Spark UI durante la ejecución del streaming para inspeccionar jobs, stages, batches y métricas de la consulta activa.
 
 ---
 
@@ -218,6 +223,10 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 4. THE Streamlit SHALL mostrar un mapa interactivo con la posición de los almacenes usando sus coordenadas lat/lon.
 5. WHEN hay datos disponibles en MongoDB, THE Streamlit SHALL mostrar los agregados de retrasos y las anomalías detectadas en el dashboard de la sección 6.
 6. THE Streamlit SHALL incluir un buscador de conceptos KDD en la barra lateral que permita navegar a la sección relevante para un término dado.
+7. THE Streamlit SHALL mostrar, en Fase II, un bloque de "Validar éxito (Airflow + HDFS)" que ejecute comandos de verificación sobre reportes Airflow, rutas HDFS `cleaned/enriched` y logs locales.
+8. WHEN la interfaz muestra salida de comandos o scripts, THE Streamlit SHALL presentar la salida en contenedor con scroll vertical y opción de descarga de logs.
+9. IF la interfaz detecta evidencia de datos reales de Fase I (reportes Airflow actualizados y/o ficheros weather recientes), THEN THE Streamlit SHALL priorizar la visualización de esos datos y ocultar bloques de ejemplo/fallback para evitar confusión.
+10. THE Streamlit SHALL mostrar enlaces/comandos de acceso a monitorización técnica en ejecución (Spark UI, YARN UI y consulta de topics Kafka) en la fase correspondiente para facilitar diagnóstico en vivo.
 
 
 ---
@@ -268,7 +277,7 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 
 1. THE Sistema SHALL procesar ventanas de retrasos de 15 minutos con una latencia máxima de 30 segundos desde el cierre de la ventana hasta la escritura en Hive.
 2. THE Kafka SHALL soportar al menos 3 particiones por topic para permitir el consumo paralelo por parte de Spark Streaming.
-3. THE Spark SHALL ejecutarse con al menos 2 ejecutores YARN con 2 núcleos y 2 GB de memoria cada uno para los jobs de streaming y batch.
+3. THE Sistema SHALL ofrecer un perfil operativo estable para Fase II en equipos limitados que use ejecución local y recursos reducidos, manteniendo como objetivo evitar reinicios del host durante la demo.
 
 ### RNF-2: Disponibilidad y tolerancia a fallos
 
@@ -297,6 +306,8 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 1. THE Sistema SHALL registrar en logs el inicio, progreso y finalización de cada job Spark, incluyendo el número de registros procesados por batch.
 2. THE Airflow SHALL mantener un historial de ejecuciones de cada DAG accesible desde su interfaz web.
 3. THE Sistema SHALL exponer la interfaz web de YARN en el puerto 8088 del nodo master para la monitorización de jobs Spark en ejecución.
+4. THE Sistema SHALL conservar evidencias operativas por ejecución en `reports/airflow/<dag_id>/LATEST.md` y permitir contrastarlas con salidas HDFS para validar éxito técnico del procesamiento.
+5. THE Sistema SHALL documentar y exponer en la operación de Fase III la URL de Spark UI activa y comandos de verificación de topics Kafka relacionados (`raw-data`, `filtered-data`, `alerts`).
 
 
 ---
