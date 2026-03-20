@@ -225,6 +225,39 @@ def spark_submit_cmd(script_path: str, *args: str, force_local: bool = False) ->
     return f"./scripts/run_spark_submit.sh {local_flag}{script_path}{suffix}"
 
 
+SPARK_PROFILE_SEGURO = "Seguro (evitar reinicios)"
+SPARK_PROFILE_NORMAL = "Normal"
+SPARK_PROFILE_OPTIONS = (SPARK_PROFILE_SEGURO, SPARK_PROFILE_NORMAL)
+
+
+def spark_resource_env_for_profile(profile: str) -> dict[str, str]:
+    """
+    Variables de entorno consumidas por `scripts/run_spark_submit.sh` para limitar
+    CPU/memoria y reducir reinicios del host en equipos de laboratorio.
+    """
+    if profile == SPARK_PROFILE_SEGURO:
+        return {
+            "SPARK_LOCAL_CORES": "2",
+            "SPARK_LOCAL_DRIVER_MEMORY": "1G",
+            "SPARK_EXECUTOR_CORES": "1",
+            "SPARK_EXECUTOR_MEMORY": "1G",
+            "SPARK_DRIVER_MEMORY": "1G",
+            "SPARK_SQL_SHUFFLE_PARTITIONS": "24",
+            "SPARK_DEFAULT_PARALLELISM": "6",
+            "NUM_EXECUTORS": "1",
+        }
+    return {
+        "SPARK_LOCAL_CORES": "4",
+        "SPARK_LOCAL_DRIVER_MEMORY": "2G",
+        "SPARK_EXECUTOR_CORES": "2",
+        "SPARK_EXECUTOR_MEMORY": "2G",
+        "SPARK_DRIVER_MEMORY": "2G",
+        "SPARK_SQL_SHUFFLE_PARTITIONS": "48",
+        "SPARK_DEFAULT_PARALLELISM": "12",
+        "NUM_EXECUTORS": "2",
+    }
+
+
 def load_sample_data():
     gps_path = DATA_SAMPLE_DIR / "gps_events.csv"
     wh_path = DATA_SAMPLE_DIR / "warehouses.csv"
@@ -696,6 +729,11 @@ def page_arranque_servicios():
     render_search_highlight(
         "aquí se gestionan los **servicios base del clúster** (HDFS, Kafka, Hive, MongoDB, NiFi, MariaDB) y se relaciona con la orquestación posterior en **Airflow**."
     )
+    st.info(
+        "**Si el equipo reinicia con frecuencia:** en las pestañas que lanzan Spark (Fase II, Grafos, Fase III) "
+        "usa el perfil **Seguro (evitar reinicios)** y deja activado el modo local cuando YARN falle. "
+        "Evita arrancar todo el stack y lanzar jobs pesados al mismo tiempo."
+    )
     st.markdown(
         """
         **Objetivo dentro del ciclo KDD**
@@ -840,6 +878,10 @@ def page_fase_i_ingesta():
     render_top_nav("1 · Fase I – Ingesta")
     render_search_highlight(
         "en esta fase se **ingestan los logs GPS y los datos de OpenWeather** con NiFi, se publican en **Kafka** y se dejan copias en **HDFS raw**."
+    )
+    st.info(
+        "Esta fase no ejecuta Spark desde el front. Si tras la ingesta el equipo queda inestable, "
+        "al pasar a **Fase II / Grafos / Fase III** elige el perfil **Seguro (evitar reinicios)** y evita jobs pesados en paralelo."
     )
     st.markdown(
         """
@@ -1298,38 +1340,16 @@ def page_fase_ii_limpieza_enriquecimiento():
     )
     resource_profile = st.selectbox(
         "Perfil de recursos Spark",
-        options=["Seguro (evitar reinicios)", "Normal"],
+        options=list(SPARK_PROFILE_OPTIONS),
         index=0,
         key="fase2_resource_profile",
         help="Usa 'Seguro' si el equipo se reinicia o se queda sin memoria durante Fase II.",
     )
-    spark_env: dict[str, str] = {}
-    if resource_profile == "Seguro (evitar reinicios)":
-        spark_env = {
-            "SPARK_LOCAL_CORES": "2",
-            "SPARK_LOCAL_DRIVER_MEMORY": "1G",
-            "SPARK_EXECUTOR_CORES": "1",
-            "SPARK_EXECUTOR_MEMORY": "1G",
-            "SPARK_DRIVER_MEMORY": "1G",
-            "SPARK_SQL_SHUFFLE_PARTITIONS": "24",
-            "SPARK_DEFAULT_PARALLELISM": "6",
-            "NUM_EXECUTORS": "1",
-        }
-    else:
-        spark_env = {
-            "SPARK_LOCAL_CORES": "4",
-            "SPARK_LOCAL_DRIVER_MEMORY": "2G",
-            "SPARK_EXECUTOR_CORES": "2",
-            "SPARK_EXECUTOR_MEMORY": "2G",
-            "SPARK_DRIVER_MEMORY": "2G",
-            "SPARK_SQL_SHUFFLE_PARTITIONS": "48",
-            "SPARK_DEFAULT_PARALLELISM": "12",
-            "NUM_EXECUTORS": "2",
-        }
+    spark_env = spark_resource_env_for_profile(resource_profile)
     # En perfil seguro priorizamos estabilidad: forzamos ejecución local para evitar
     # fallos YARN/AM en entornos con red/recursos inestables tras reinicios.
-    force_local_effective = force_local or (resource_profile == "Seguro (evitar reinicios)")
-    if resource_profile == "Seguro (evitar reinicios)" and not force_local:
+    force_local_effective = force_local or (resource_profile == SPARK_PROFILE_SEGURO)
+    if resource_profile == SPARK_PROFILE_SEGURO and not force_local:
         st.info("Perfil seguro activo: Spark se ejecutará en modo local automáticamente.")
     if not yarn_up:
         st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
@@ -1614,36 +1634,14 @@ def page_fase_ii_grafos():
     )
     graph_resource_profile = st.selectbox(
         "Perfil de recursos Spark (grafos)",
-        options=["Seguro (evitar reinicios)", "Normal"],
+        options=list(SPARK_PROFILE_OPTIONS),
         index=0,
         key="fase2_graph_resource_profile",
         help="Usa 'Seguro' si el equipo se reinicia durante GraphFrames o visualización.",
     )
-    graph_spark_env: dict[str, str] = {}
-    if graph_resource_profile == "Seguro (evitar reinicios)":
-        graph_spark_env = {
-            "SPARK_LOCAL_CORES": "2",
-            "SPARK_LOCAL_DRIVER_MEMORY": "1G",
-            "SPARK_EXECUTOR_CORES": "1",
-            "SPARK_EXECUTOR_MEMORY": "1G",
-            "SPARK_DRIVER_MEMORY": "1G",
-            "SPARK_SQL_SHUFFLE_PARTITIONS": "16",
-            "SPARK_DEFAULT_PARALLELISM": "4",
-            "NUM_EXECUTORS": "1",
-        }
-    else:
-        graph_spark_env = {
-            "SPARK_LOCAL_CORES": "4",
-            "SPARK_LOCAL_DRIVER_MEMORY": "2G",
-            "SPARK_EXECUTOR_CORES": "2",
-            "SPARK_EXECUTOR_MEMORY": "2G",
-            "SPARK_DRIVER_MEMORY": "2G",
-            "SPARK_SQL_SHUFFLE_PARTITIONS": "32",
-            "SPARK_DEFAULT_PARALLELISM": "8",
-            "NUM_EXECUTORS": "2",
-        }
-    force_local_graph_effective = force_local or (graph_resource_profile == "Seguro (evitar reinicios)")
-    if graph_resource_profile == "Seguro (evitar reinicios)" and not force_local:
+    graph_spark_env = spark_resource_env_for_profile(graph_resource_profile)
+    force_local_graph_effective = force_local or (graph_resource_profile == SPARK_PROFILE_SEGURO)
+    if graph_resource_profile == SPARK_PROFILE_SEGURO and not force_local:
         st.info("Perfil seguro activo en grafos: Spark se ejecutará en modo local automáticamente.")
     if not yarn_up:
         st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
@@ -2328,6 +2326,17 @@ def page_fase_iii_streaming_anomalias():
         value=not yarn_up,
         key="fase3_force_local",
     )
+    fase3_resource_profile = st.selectbox(
+        "Perfil de recursos Spark (Fase III)",
+        options=list(SPARK_PROFILE_OPTIONS),
+        index=0,
+        key="fase3_resource_profile",
+        help="Usa 'Seguro' si el equipo se reinicia durante streaming o detección de anomalías.",
+    )
+    fase3_spark_env = spark_resource_env_for_profile(fase3_resource_profile)
+    force_local_fase3_effective = force_local or (fase3_resource_profile == SPARK_PROFILE_SEGURO)
+    if fase3_resource_profile == SPARK_PROFILE_SEGURO and not force_local:
+        st.info("Perfil seguro activo en Fase III: Spark se ejecutará en modo local automáticamente.")
     if not yarn_up:
         st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
 
@@ -2392,8 +2401,9 @@ def page_fase_iii_streaming_anomalias():
                 spark_submit_cmd(
                     "spark/streaming/delays_windowed.py",
                     modo_stream,
-                    force_local=force_local,
-                )
+                    force_local=force_local_fase3_effective,
+                ),
+                extra_env=fase3_spark_env,
             )
         st.subheader("Salida de delays_windowed.py")
         render_log_output(
@@ -2408,8 +2418,9 @@ def page_fase_iii_streaming_anomalias():
             output = run_command(
                 spark_submit_cmd(
                     "spark/ml/anomaly_detection.py",
-                    force_local=force_local,
-                )
+                    force_local=force_local_fase3_effective,
+                ),
+                extra_env=fase3_spark_env,
             )
         st.subheader("Salida de anomaly_detection.py")
         render_log_output(
