@@ -1612,6 +1612,39 @@ def page_fase_ii_grafos():
         value=not yarn_up,
         key="fase2_graph_force_local",
     )
+    graph_resource_profile = st.selectbox(
+        "Perfil de recursos Spark (grafos)",
+        options=["Seguro (evitar reinicios)", "Normal"],
+        index=0,
+        key="fase2_graph_resource_profile",
+        help="Usa 'Seguro' si el equipo se reinicia durante GraphFrames o visualización.",
+    )
+    graph_spark_env: dict[str, str] = {}
+    if graph_resource_profile == "Seguro (evitar reinicios)":
+        graph_spark_env = {
+            "SPARK_LOCAL_CORES": "2",
+            "SPARK_LOCAL_DRIVER_MEMORY": "1G",
+            "SPARK_EXECUTOR_CORES": "1",
+            "SPARK_EXECUTOR_MEMORY": "1G",
+            "SPARK_DRIVER_MEMORY": "1G",
+            "SPARK_SQL_SHUFFLE_PARTITIONS": "16",
+            "SPARK_DEFAULT_PARALLELISM": "4",
+            "NUM_EXECUTORS": "1",
+        }
+    else:
+        graph_spark_env = {
+            "SPARK_LOCAL_CORES": "4",
+            "SPARK_LOCAL_DRIVER_MEMORY": "2G",
+            "SPARK_EXECUTOR_CORES": "2",
+            "SPARK_EXECUTOR_MEMORY": "2G",
+            "SPARK_DRIVER_MEMORY": "2G",
+            "SPARK_SQL_SHUFFLE_PARTITIONS": "32",
+            "SPARK_DEFAULT_PARALLELISM": "8",
+            "NUM_EXECUTORS": "2",
+        }
+    force_local_graph_effective = force_local or (graph_resource_profile == "Seguro (evitar reinicios)")
+    if graph_resource_profile == "Seguro (evitar reinicios)" and not force_local:
+        st.info("Perfil seguro activo en grafos: Spark se ejecutará en modo local automáticamente.")
     if not yarn_up:
         st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
 
@@ -1623,12 +1656,13 @@ def page_fase_ii_grafos():
         with st.spinner("Lanzando Spark (GraphFrames) y generación de grafo..."):
             cmd_graph = spark_submit_cmd(
                 "spark/graph/transport_graph.py",
-                force_local=force_local,
+                force_local=force_local_graph_effective,
             )
             output = run_command_streaming(
                 f"{cmd_graph} && "
                 f"{sys.executable} scripts/ver_grafos_resultados.py --viz",
                 live_output,
+                extra_env=graph_spark_env,
             )
         st.subheader("Salida final de comandos de grafos")
         render_log_output(
