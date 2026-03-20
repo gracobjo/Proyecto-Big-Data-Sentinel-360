@@ -392,9 +392,9 @@ El sistema opera sobre un clúster multi-nodo (Hadoop/YARN) e integra NiFi, Kafk
 
 **Flujo principal:**
 1. El Administrador accede a la interfaz web de Airflow.
-2. El Administrador activa y dispara el DAG `sentinel360_fase_i_ingesta` para ejecutar la ingesta.
-3. Una vez completada la Fase I, el Administrador dispara el DAG `sentinel360_fase_ii_preprocesamiento`.
-4. Una vez completada la Fase II, el Administrador dispara el DAG `sentinel360_fase_iii_batch`.
+2. El Administrador activa y dispara el DAG `sentinel360_fase_I_ingesta` para ejecutar la ingesta.
+3. Una vez completada la Fase I, el Administrador dispara el DAG `sentinel360_fase_II_preprocesamiento`.
+4. Una vez completada la Fase II, el Administrador dispara el DAG `sentinel360_fase_III_batch`.
 5. Airflow ejecuta en orden: carga de agregados → detección de anomalías → exportación de KPIs a MariaDB.
 6. El Administrador verifica el estado de cada tarea en la interfaz de Airflow y revisa los logs ante cualquier fallo.
 

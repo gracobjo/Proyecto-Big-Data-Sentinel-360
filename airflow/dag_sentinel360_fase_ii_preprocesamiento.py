@@ -30,12 +30,12 @@ def spark(script: str) -> str:
     return f"cd {PROJECT_DIR} && SPARK_MASTER=\"{SPARK_MASTER_VALUE}\" && ./scripts/run_spark_submit.sh{local_flag}{script} "
 
 with DAG(
-    dag_id="sentinel360_fase_ii_preprocesamiento",
+    dag_id="sentinel360_fase_II_preprocesamiento",
     default_args={"owner": "sentinel360", "retries": 1, "retry_delay": timedelta(minutes=5), "execution_timeout": timedelta(minutes=60)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
-    tags=["sentinel360", "fase-ii", "kdd-preprocesamiento"],
+    tags=["sentinel360", "fase-II", "kdd-preprocesamiento"],
     description="Fase II KDD: Hive setup, limpieza, enriquecimiento y grafo de transporte.",
 ) as dag:
     hive_setup = BashOperator(

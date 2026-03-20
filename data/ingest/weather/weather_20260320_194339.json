@@ -1,0 +1,46 @@
+{
+  "coord": {
+    "lon": -3.7026,
+    "lat": 40.4165
+  },
+  "weather": [
+    {
+      "id": 803,
+      "main": "Clouds",
+      "description": "broken clouds",
+      "icon": "04n"
+    }
+  ],
+  "base": "stations",
+  "main": {
+    "temp": 9.46,
+    "feels_like": 8.99,
+    "temp_min": 8.59,
+    "temp_max": 9.68,
+    "pressure": 1012,
+    "humidity": 78,
+    "sea_level": 1012,
+    "grnd_level": 937
+  },
+  "visibility": 10000,
+  "wind": {
+    "speed": 1.54,
+    "deg": 100
+  },
+  "clouds": {
+    "all": 75
+  },
+  "dt": 1774035126,
+  "sys": {
+    "type": 2,
+    "id": 2084029,
+    "country": "ES",
+    "sunrise": 1773987516,
+    "sunset": 1774031163
+  },
+  "timezone": 3600,
+  "id": 6545083,
+  "name": "Sol",
+  "cod": 200,
+  "_ingested_at": "2026-03-20T19:43:39.350406+00:00"
+}

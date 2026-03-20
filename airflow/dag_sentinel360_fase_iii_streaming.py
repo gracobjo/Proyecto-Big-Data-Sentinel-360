@@ -31,12 +31,12 @@ SPARK_CMD_PREFIX = (
 from sentinel360_reporting import Sentinel360ReportConfig, write_dag_run_report  # type: ignore
 
 with DAG(
-    dag_id="sentinel360_fase_iii_streaming",
+    dag_id="sentinel360_fase_III_streaming",
     default_args={"owner": "sentinel360", "retries": 0, "retry_delay": timedelta(minutes=2), "execution_timeout": timedelta(minutes=30)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
-    tags=["sentinel360", "fase-iii", "kdd-mineria", "streaming"],
+    tags=["sentinel360", "fase-III", "kdd-mineria", "streaming"],
     description="Fase III KDD: streaming de retrasos (delays_windowed). Modo file o kafka.",
 ) as dag:
     run_streaming = BashOperator(

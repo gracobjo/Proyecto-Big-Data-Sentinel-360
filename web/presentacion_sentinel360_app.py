@@ -3,6 +3,10 @@ import sys
 import base64
 import heapq
 import re
+import json
+import socket
+import os
+import html
 from pathlib import Path
 
 # Asegurar que el proyecto está en el path para importar config
@@ -59,23 +63,166 @@ GRAPH_FUEL_COST_EUR_PER_KM = 1.2
 GRAPH_DELAY_COST_EUR_PER_MIN = 2.0
 
 
-def run_command(cmd: str) -> str:
+def run_command(cmd: str, extra_env: dict[str, str] | None = None) -> str:
     """
     Ejecuta un comando de shell desde la raíz del proyecto y devuelve stdout+stderr.
     No lanza excepción si falla: devolvemos el error en texto para mostrarlo en Streamlit.
     """
     try:
+        env = os.environ.copy()
+        if extra_env:
+            env.update(extra_env)
         completed = subprocess.run(
-            cmd,
-            shell=True,
+            ["bash", "-lc", f"source ~/.bashrc >/dev/null 2>&1 || true; {cmd}"],
             cwd=str(PROJECT_ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            env=env,
         )
         return completed.stdout
     except Exception as exc:  # pragma: no cover - interfaz interactiva
         return f"Error ejecutando comando:\n{exc}"
+
+
+def run_command_streaming(cmd: str, output_slot, extra_env: dict[str, str] | None = None) -> str:
+    """
+    Ejecuta un comando mostrando stdout/stderr en tiempo real en Streamlit.
+    Devuelve la salida completa al finalizar.
+    """
+    try:
+        env = os.environ.copy()
+        if extra_env:
+            env.update(extra_env)
+        proc = subprocess.Popen(
+            ["bash", "-lc", f"source ~/.bashrc >/dev/null 2>&1 || true; {cmd}"],
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
+        lines: list[str] = []
+        if proc.stdout is not None:
+            for line in proc.stdout:
+                lines.append(line)
+                # Mostrar las últimas líneas para evitar renderizados enormes.
+                tail = "".join(lines[-200:])
+                safe_tail = html.escape(tail if tail else "Ejecutando...")
+                output_slot.markdown(
+                    (
+                        "<div style='max-height:320px; overflow:auto; "
+                        "white-space:pre-wrap; word-break:break-word; "
+                        "font-family:monospace; font-size:0.85rem; "
+                        "padding:0.75rem; border:1px solid #30363d; border-radius:0.5rem;'>"
+                        f"{safe_tail}"
+                        "</div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
+        return_code = proc.wait()
+        output = "".join(lines)
+        if return_code != 0:
+            output += f"\n[exit_code={return_code}]"
+        return output
+    except Exception as exc:  # pragma: no cover - interfaz interactiva
+        return f"Error ejecutando comando en streaming:\n{exc}"
+
+
+def render_log_output(
+    label: str,
+    content: str,
+    *,
+    key: str,
+    height: int = 280,
+    download_name: str | None = None,
+) -> None:
+    """
+    Renderiza logs en un cuadro con scroll y fácil de copiar.
+    """
+    st.text_area(
+        label,
+        value=content or "",
+        height=height,
+        key=key,
+    )
+    if download_name:
+        st.download_button(
+            label="Descargar log (.txt)",
+            data=(content or "").encode("utf-8"),
+            file_name=download_name,
+            mime="text/plain",
+            key=f"{key}_download",
+        )
+
+
+def is_yarn_resource_manager_up(host: str = "hadoop", port: int = 8032, timeout_s: float = 1.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def is_port_open(host: str, port: int, timeout_s: float = 1.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def is_any_endpoint_up(endpoints: list[tuple[str, int]], timeout_s: float = 1.5) -> bool:
+    return any(is_port_open(h, p, timeout_s=timeout_s) for h, p in endpoints)
+
+
+def build_service_health_dashboard() -> pd.DataFrame:
+    checks = [
+        {
+            "Servicio": "HDFS NameNode",
+            "Estado": "OK" if is_any_endpoint_up([("hadoop", 9000), ("127.0.0.1", 9000)]) else "NO",
+            "Endpoint": "hadoop:9000 / 127.0.0.1:9000",
+        },
+        {
+            "Servicio": "YARN ResourceManager",
+            "Estado": "OK" if is_yarn_resource_manager_up() else "NO",
+            "Endpoint": "hadoop:8032",
+        },
+        {
+            "Servicio": "Kafka Broker",
+            "Estado": "OK" if is_any_endpoint_up([("hadoop", 9092), ("127.0.0.1", 9092)]) else "NO",
+            "Endpoint": "hadoop:9092 / 127.0.0.1:9092",
+        },
+        {
+            "Servicio": "MariaDB (XAMPP)",
+            "Estado": "OK" if is_port_open("127.0.0.1", 3306) else "NO",
+            "Endpoint": "127.0.0.1:3306",
+        },
+        {
+            "Servicio": "MongoDB",
+            "Estado": "OK" if is_port_open("127.0.0.1", 27017) else "NO",
+            "Endpoint": "127.0.0.1:27017",
+        },
+        {
+            "Servicio": "HiveServer2",
+            "Estado": "OK" if is_port_open("127.0.0.1", 10000) else "NO",
+            "Endpoint": "127.0.0.1:10000",
+        },
+        {
+            "Servicio": "NiFi UI",
+            "Estado": "OK" if is_any_endpoint_up([("127.0.0.1", 8443), ("127.0.0.1", 8080)]) else "NO",
+            "Endpoint": "127.0.0.1:8443 / 127.0.0.1:8080",
+        },
+    ]
+    return pd.DataFrame(checks)
+
+
+def spark_submit_cmd(script_path: str, *args: str, force_local: bool = False) -> str:
+    local_flag = "--local " if force_local else ""
+    arg_str = " ".join(str(a) for a in args if str(a).strip())
+    suffix = f" {arg_str}" if arg_str else ""
+    return f"./scripts/run_spark_submit.sh {local_flag}{script_path}{suffix}"
 
 
 def load_sample_data():
@@ -89,6 +236,182 @@ def load_sample_data():
         pd.read_csv(routes_path, comment="#") if routes_path.exists() else None
     )
     return gps_df, wh_df, routes_df
+
+
+def _latest_file_by_pattern(base_dir: Path, pattern: str) -> Path | None:
+    files = list(base_dir.glob(pattern))
+    if not files:
+        return None
+    return max(files, key=lambda p: p.stat().st_mtime)
+
+
+def _load_latest_airflow_run_df(dag_ids: list[str], max_rows: int = 15) -> pd.DataFrame:
+    """
+    Devuelve un dataframe con las últimas ejecuciones encontradas en reports/airflow.
+    """
+    reports_base = PROJECT_ROOT / "reports" / "airflow"
+    rows: list[dict] = []
+    if not reports_base.exists():
+        return pd.DataFrame()
+
+    for dag_id in dag_ids:
+        dag_dir = reports_base / dag_id
+        if not dag_dir.exists():
+            continue
+        for fp in dag_dir.glob("*.json"):
+            if fp.name == "LATEST.json":
+                continue
+            try:
+                data = json.loads(fp.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            rows.append(
+                {
+                    "dag_id": data.get("dag_id") or dag_id,
+                    "run_id": data.get("run_id"),
+                    "state": str(data.get("state") or "").replace("DagRunState.", ""),
+                    "start_date": data.get("start_date"),
+                    "end_date": data.get("end_date"),
+                    "generated_at_utc": data.get("generated_at_utc"),
+                }
+            )
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows).drop_duplicates(subset=["dag_id", "run_id"], keep="last")
+    for c in ["generated_at_utc", "start_date", "end_date"]:
+        if c in df.columns:
+            df[c] = pd.to_datetime(df[c], errors="coerce", utc=True)
+    return df.sort_values(by="generated_at_utc", ascending=False).head(max_rows)
+
+
+def _load_recent_weather_ingest(max_rows: int = 100) -> pd.DataFrame:
+    weather_dir = PROJECT_ROOT / "data" / "ingest" / "weather"
+    latest = _latest_file_by_pattern(weather_dir, "weather_*.json")
+    if latest is None:
+        return pd.DataFrame()
+    try:
+        raw = json.loads(latest.read_text(encoding="utf-8"))
+    except Exception:
+        return pd.DataFrame()
+    if isinstance(raw, list):
+        df = pd.json_normalize(raw)
+    elif isinstance(raw, dict):
+        df = pd.json_normalize([raw])
+    else:
+        return pd.DataFrame()
+    if not df.empty:
+        df.insert(0, "source_file", latest.name)
+    return df.head(max_rows)
+
+
+def _latest_weather_file_info() -> tuple[Path | None, pd.Timestamp | None]:
+    weather_dir = PROJECT_ROOT / "data" / "ingest" / "weather"
+    latest = _latest_file_by_pattern(weather_dir, "weather_*.json")
+    if latest is None:
+        return None, None
+    ts = pd.Timestamp(latest.stat().st_mtime, unit="s", tz="UTC")
+    return latest, ts
+
+
+def _recent_weather_files(max_items: int = 5) -> pd.DataFrame:
+    weather_dir = PROJECT_ROOT / "data" / "ingest" / "weather"
+    if not weather_dir.exists():
+        return pd.DataFrame()
+    files = [p for p in weather_dir.glob("weather_*.json") if p.is_file()]
+    if not files:
+        return pd.DataFrame()
+    files = sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)[:max_items]
+    rows = []
+    for fp in files:
+        rows.append(
+            {
+                "file": fp.name,
+                "modified_local": _format_local_ts(pd.Timestamp(fp.stat().st_mtime, unit="s", tz="UTC")),
+                "size_bytes": fp.stat().st_size,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _format_local_ts(ts: pd.Timestamp | None) -> str:
+    if ts is None or pd.isna(ts):
+        return "N/D"
+    try:
+        return ts.tz_convert("Europe/Madrid").strftime("%Y-%m-%d %H:%M:%S %Z")
+    except Exception:
+        return str(ts)
+
+
+def _to_utc_timestamp(ts: pd.Timestamp) -> pd.Timestamp:
+    """
+    Normaliza un Timestamp a UTC soportando valores naive y tz-aware.
+    """
+    if ts.tzinfo is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
+
+
+def _latest_fase_i_artifact_timestamp() -> tuple[pd.Timestamp | None, str]:
+    """
+    Busca la marca temporal más reciente de artefactos típicos de Fase I.
+    """
+    candidates = [
+        PROJECT_ROOT / "data" / "sample" / "gps_events.csv",
+        PROJECT_ROOT / "data" / "sample" / "gps_events.json",
+        PROJECT_ROOT / "data" / "ingest" / "weather",
+        Path("/home/hadoop/data/gps_logs"),
+    ]
+    latest_ts: pd.Timestamp | None = None
+    latest_src = "N/D"
+    for p in candidates:
+        if not p.exists():
+            continue
+        if p.is_dir():
+            files = [f for f in p.iterdir() if f.is_file()]
+            if not files:
+                continue
+            fp = max(files, key=lambda x: x.stat().st_mtime)
+            mtime = pd.Timestamp(fp.stat().st_mtime, unit="s", tz="UTC")
+            src = str(fp)
+        else:
+            mtime = pd.Timestamp(p.stat().st_mtime, unit="s", tz="UTC")
+            src = str(p)
+        if latest_ts is None or mtime > latest_ts:
+            latest_ts = mtime
+            latest_src = src
+    return latest_ts, latest_src
+
+
+def _summarize_gps_file(path: Path) -> dict[str, str]:
+    """
+    Devuelve metadatos del fichero GPS para validar si está actualizado.
+    """
+    if not path.exists():
+        return {"mtime": "N/D", "ts_min": "N/D", "ts_max": "N/D", "rows": "0"}
+
+    mtime = _format_local_ts(pd.Timestamp(path.stat().st_mtime, unit="s", tz="UTC"))
+    try:
+        if path.suffix.lower() == ".json":
+            df = pd.read_json(path, lines=True)
+        else:
+            df = pd.read_csv(path)
+    except Exception:
+        return {"mtime": mtime, "ts_min": "N/D", "ts_max": "N/D", "rows": "N/D"}
+
+    rows = str(len(df))
+    if "ts" not in df.columns or df.empty:
+        return {"mtime": mtime, "ts_min": "N/D", "ts_max": "N/D", "rows": rows}
+
+    ts = pd.to_datetime(df["ts"], format="ISO8601", errors="coerce", utc=True).dropna()
+    if ts.empty:
+        return {"mtime": mtime, "ts_min": "N/D", "ts_max": "N/D", "rows": rows}
+
+    return {
+        "mtime": mtime,
+        "ts_min": _format_local_ts(ts.min()),
+        "ts_max": _format_local_ts(ts.max()),
+        "rows": rows,
+    }
 
 
 def get_mongo_client() -> pymongo.MongoClient:
@@ -394,6 +717,27 @@ def page_arranque_servicios():
         - **Salida**: servicios arriba y verificados para poder seguir con las fases KDD.
         """
     )
+    st.subheader("Cuadro de mando de servicios (tiempo real)")
+    col_refresh, col_hint = st.columns([1, 2])
+    with col_refresh:
+        if st.button("Actualizar estado", key="refresh_service_dashboard"):
+            st.rerun()
+    with col_hint:
+        st.caption("Semáforo rápido para validar si el stack base está listo antes de ejecutar fases KDD.")
+
+    health_df = build_service_health_dashboard()
+    ok_count = int((health_df["Estado"] == "OK").sum())
+    total_count = int(len(health_df))
+    no_count = total_count - ok_count
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Servicios OK", f"{ok_count}/{total_count}")
+    c2.metric("Servicios NO", f"{no_count}")
+    c3.metric("Disponibilidad", f"{(ok_count / max(1, total_count)) * 100:.0f}%")
+    st.dataframe(health_df, width="stretch", hide_index=True)
+    if no_count > 0:
+        st.warning("Hay servicios pendientes. Arranca servicios o revisa puertos antes de seguir con las fases.")
+    else:
+        st.success("Stack base operativo. Puedes continuar con Fase I/Fase II/Fase III.")
 
     docs_path = PROJECT_ROOT / "docs" / "ARRANQUE_SERVICIOS.md"
     if docs_path.exists():
@@ -403,7 +747,7 @@ def page_arranque_servicios():
         st.info("No se ha encontrado `docs/ARRANQUE_SERVICIOS.md` en el proyecto.")
 
     st.subheader("Comando que se va a ejecutar")
-    st.code("./scripts/start_servicios.sh", language="bash")
+    st.code("SENTINEL360_SKIP_SUDO_STARTS=1 ./scripts/start_servicios.sh", language="bash")
 
     st.markdown(
         """
@@ -420,10 +764,48 @@ def page_arranque_servicios():
     )
 
     if st.button("Arrancar servicios (start_servicios.sh)"):
+        st.subheader("Salida en tiempo real")
+        live_output = st.empty()
         with st.spinner("Arrancando servicios..."):
-            output = run_command("./scripts/start_servicios.sh")
+            output = run_command_streaming(
+                "./scripts/start_servicios.sh",
+                live_output,
+                extra_env={"SENTINEL360_SKIP_SUDO_STARTS": "1"},
+            )
         st.subheader("Salida del script")
-        st.text(output)
+        render_log_output(
+            "Log de `start_servicios.sh`",
+            output,
+            key="log_start_servicios",
+            download_name="start_servicios.log.txt",
+        )
+        if "Arráncalo manualmente" in output or "omite sudo" in output:
+            st.warning(
+                "Se ha ejecutado en modo no interactivo (sin sudo). "
+                "Si MariaDB/XAMPP no estaba arriba, arráncalo en terminal con: "
+                "`sudo /opt/lampp/lampp startmysql`"
+            )
+
+    st.subheader("Comprobación rápida de puertos críticos")
+    st.code(
+        'nc -z -w2 127.0.0.1 3306 && echo "MariaDB OK" || echo "MariaDB NO"\n'
+        'nc -z -w2 127.0.0.1 27017 && echo "Mongo OK" || echo "Mongo NO"\n'
+        'nc -z -w2 127.0.0.1 10000 && echo "HiveServer2 OK" || echo "HiveServer2 NO"',
+        language="bash",
+    )
+    if st.button("Verificar puertos (3306/27017/10000)"):
+        with st.spinner("Comprobando puertos de servicios..."):
+            checks_output = run_command(
+                'nc -z -w2 127.0.0.1 3306 && echo "MariaDB OK" || echo "MariaDB NO"; '
+                'nc -z -w2 127.0.0.1 27017 && echo "Mongo OK" || echo "Mongo NO"; '
+                'nc -z -w2 127.0.0.1 10000 && echo "HiveServer2 OK" || echo "HiveServer2 NO"'
+            )
+        render_log_output(
+            "Resultado de comprobación de puertos",
+            checks_output,
+            key="log_health_ports",
+            download_name="healthcheck_puertos.log.txt",
+        )
 
     st.subheader("Ejecutar todo desde Airflow")
     st.markdown(
@@ -480,6 +862,15 @@ def page_fase_i_ingesta():
         Más detalle de esta fase en `docs/INGEST/` y en `docs/KDD_FASES.md`.
         """
     )
+    st.subheader("Trazabilidad temporal de Fase I")
+    now_ts = _to_utc_timestamp(pd.Timestamp.utcnow())
+    latest_f1_ts, latest_f1_src = _latest_fase_i_artifact_timestamp()
+    cts1, cts2 = st.columns(2)
+    with cts1:
+        st.metric("Hora actual del panel", _format_local_ts(now_ts))
+    with cts2:
+        st.metric("Última evidencia real Fase I", _format_local_ts(latest_f1_ts))
+    st.caption(f"Fuente de evidencia detectada: `{latest_f1_src}`")
 
     # Documentación relacionada accesible desde la propia pestaña
     ingest_docs = [
@@ -496,6 +887,13 @@ def page_fase_i_ingesta():
 
     st.subheader("Vista previa de ficheros de entrada")
     gps_json_path = PROJECT_ROOT / "data" / "sample" / "gps_events.json"
+    gps_meta = _summarize_gps_file(gps_json_path)
+    st.caption(
+        "GPS (verificación) -> "
+        f"modificado: {gps_meta['mtime']} | "
+        f"rango ts: {gps_meta['ts_min']} -> {gps_meta['ts_max']} | "
+        f"filas: {gps_meta['rows']}"
+    )
     show_text_file_preview(
         gps_json_path,
         "Muestra de `data/sample/gps_events.json` (5 primeras y 5 últimas líneas si es largo)",
@@ -517,6 +915,46 @@ def page_fase_i_ingesta():
                 "EvaluateJsonPath → RouteOnAttribute → PublishKafka raw/filtered"
             ),
         )
+
+    st.subheader("NiFi UI (comprobación y arranque)")
+    st.markdown(
+        "- URL recomendada: [https://localhost:8443/nifi](https://localhost:8443/nifi)\n"
+        "- Fallback HTTP (si aplica): [http://localhost:8080/nifi](http://localhost:8080/nifi)"
+    )
+    nifi_up = is_any_endpoint_up([("127.0.0.1", 8443), ("127.0.0.1", 8080)])
+    st.metric("Estado NiFi UI", "OK" if nifi_up else "NO DISPONIBLE")
+    col_nifi1, col_nifi2 = st.columns(2)
+    with col_nifi1:
+        if st.button("Comprobar NiFi UI ahora", key="check_nifi_ui_f1"):
+            check_out = run_command(
+                'nc -z -w2 127.0.0.1 8443 && echo "NiFi HTTPS OK (8443)" || echo "NiFi HTTPS NO (8443)"; '
+                'nc -z -w2 127.0.0.1 8080 && echo "NiFi HTTP OK (8080)" || echo "NiFi HTTP NO (8080)"'
+            )
+            render_log_output(
+                "Resultado comprobación NiFi UI",
+                check_out,
+                key="log_check_nifi_ui_f1",
+                download_name="check_nifi_ui.log.txt",
+            )
+    with col_nifi2:
+        if st.button("Arrancar NiFi desde front", key="start_nifi_from_front_f1"):
+            st.subheader("Salida en tiempo real (NiFi)")
+            slot_nifi = st.empty()
+            with st.spinner("Intentando arrancar NiFi..."):
+                nifi_out = run_command_streaming(
+                    'if [ -x "/opt/nifi/nifi-2.7.2/bin/nifi.sh" ]; then '
+                    '/opt/nifi/nifi-2.7.2/bin/nifi.sh start; '
+                    'elif [ -x "/usr/local/nifi/bin/nifi.sh" ]; then '
+                    '/usr/local/nifi/bin/nifi.sh start; '
+                    'else echo "No se encontró nifi.sh en rutas conocidas."; fi',
+                    slot_nifi,
+                )
+            render_log_output(
+                "Log arranque NiFi",
+                nifi_out,
+                key="log_start_nifi_f1",
+                download_name="start_nifi.log.txt",
+            )
 
     st.subheader("Comandos de esta fase")
     st.code(
@@ -558,110 +996,233 @@ def page_fase_i_ingesta():
         with st.spinner("Ejecutando scripts de Fase I..."):
             output = run_command("./scripts/setup_hdfs.sh && ./scripts/preparar_ingesta_nifi.sh")
         st.subheader("Salida de los scripts")
-        st.text(output)
+        render_log_output(
+            "Log de Fase I",
+            output,
+            key="log_fase_i",
+            download_name="fase_i.log.txt",
+        )
         if "Connection refused" in output or "No se puede conectar a HDFS" in output:
             st.warning(
                 "HDFS no está disponible. Arranca antes los servicios desde la pestaña **0 · Arranque de servicios** "
                 "(botón *Arrancar servicios*) o ejecuta en terminal: `./scripts/start_servicios.sh`."
             )
+        # Fuerza rerender para refrescar timestamps/evidencias tras ejecutar la fase.
+        st.rerun()
 
-    st.subheader("Datos de ejemplo (data/sample)")
-    gps_df, wh_df, routes_df = load_sample_data()
-    if gps_df is not None:
-        st.markdown("**Muestra de eventos GPS (`gps_events.csv`)**")
-        st.dataframe(gps_df.head())
+    st.subheader("Comprobar ingesta en HDFS (sin salir del front)")
+    st.code(
+        "hdfs dfs -ls /user/hadoop/proyecto/raw\n"
+        "hdfs dfs -ls /user/hadoop/proyecto/warehouses\n"
+        "hdfs dfs -ls /user/hadoop/proyecto/routes\n"
+        "hdfs dfs -du -h /user/hadoop/proyecto/raw",
+        language="bash",
+    )
+    if st.button("Verificar datos en HDFS ahora", key="fase1_check_hdfs_now"):
+        with st.spinner("Comprobando rutas y datos en HDFS..."):
+            hdfs_check_output = run_command(
+                "hdfs dfs -ls /user/hadoop/proyecto/raw 2>&1; "
+                "hdfs dfs -ls /user/hadoop/proyecto/warehouses 2>&1; "
+                "hdfs dfs -ls /user/hadoop/proyecto/routes 2>&1; "
+                "hdfs dfs -du -h /user/hadoop/proyecto/raw 2>&1; "
+                "echo '--- MUESTRA (raw/gps_events.json) ---'; "
+                "hdfs dfs -cat /user/hadoop/proyecto/raw/gps_events.json 2>/dev/null | sed -n '1,3p' || true"
+            )
+        render_log_output(
+            "Resultado comprobación HDFS (Fase I)",
+            hdfs_check_output,
+            key="log_fase1_hdfs_check",
+            download_name="fase1_hdfs_check.log.txt",
+        )
+
+    st.subheader("Datos generados por la ejecución (si existen)")
+    weather_df = _load_recent_weather_ingest(max_rows=50)
+    weather_fp, weather_ts = _latest_weather_file_info()
+    now_ts = _to_utc_timestamp(pd.Timestamp.utcnow())
+    if not weather_df.empty:
+        st.markdown("**Última captura meteorológica (`data/ingest/weather`)**")
+        st.caption(
+            "Archivo usado: "
+            f"`{weather_fp.name if weather_fp else 'N/D'}` | "
+            f"modificado: `{_format_local_ts(weather_ts)}`"
+        )
+        if weather_ts is not None:
+            age_hours = float((now_ts - weather_ts).total_seconds() / 3600.0)
+            if age_hours > 6:
+                st.warning(
+                    f"La captura meteorológica visible tiene {age_hours:.1f} h de antigüedad. "
+                    "Si acabas de ejecutar Fase I pero no se lanzó OpenWeather, este bloque puede quedar desactualizado."
+                )
+        st.dataframe(weather_df, width="stretch")
     else:
-        st.info("No se ha encontrado `data/sample/gps_events.csv`.")
-
-    st.markdown(
-        """
-        ### Cargar nuevos ficheros de ejemplo (GPS / rutas)
-
-        Aquí puedes **probar otros ficheros de entrada** sin tocar el repositorio:
-
-        - **GPS (`gps_events`)**:
-          - Formatos soportados en el pipeline: **CSV o JSON**.
-          - Campos típicos (ver `data/sample/README.md`):
-            - `event_id`, `vehicle_id`, `ts` (timestamp ISO), `lat`, `lon`, `speed`, `warehouse_id`, `route_id`, `delay_minutes`.
-          - El pipeline de limpieza (`clean_and_normalize.py`) está preparado para leer
-            `gps_events*.csv` o `gps_events*.json` en la carpeta *raw* de HDFS.
-        - **Rutas (`routes.csv`)**:
-          - Formato actual soportado: **CSV**.
-          - Estructura esperada:
-            - `route_id`, `from_warehouse_id`, `to_warehouse_id`, `distance_km`, `avg_duration_min`.
-          - Se usa como maestro de rutas en Hive/GraphFrames (no en JSON en la versión actual).
-
-        Los ficheros que subas aquí se usan **solo para visualización en la demo**.  
-        Para que entren en el pipeline real, deberás copiarlos después a `data/sample/`
-        y/o subirlos a HDFS con los scripts de ingesta (`ingest_from_local.sh`, etc.).
-        """
+        st.info(
+            "Aún no se han encontrado ficheros en `data/ingest/weather/`. "
+            "Ejecuta la ingesta para que aparezcan aquí."
+        )
+    recent_weather_df = _recent_weather_files(max_items=5)
+    if not recent_weather_df.empty:
+        st.markdown("**Últimos ficheros meteorológicos detectados**")
+        st.dataframe(recent_weather_df, width="stretch", hide_index=True)
+    st.caption(
+        "Nota: ejecutar `setup_hdfs.sh + preparar_ingesta_nifi.sh` no garantiza refrescar OpenWeather. "
+        "Para actualizar este bloque, ejecuta la ingesta OpenWeather explícitamente."
     )
-
-    st.subheader("Subir nuevo fichero de GPS")
-    gps_upload = st.file_uploader(
-        "Sube un fichero de eventos GPS (CSV o JSON)",
-        type=["csv", "json"],
-        key="upload_gps_events",
+    st.markdown("**Actualizar OpenWeather manualmente**")
+    ow_key_default = os.environ.get("OPENWEATHER_API_KEY", "")
+    ow_api_key = st.text_input(
+        "API key de OpenWeather",
+        value=ow_key_default,
+        type="password",
+        help="Necesaria para ejecutar scripts/ingest_openweather.py desde este front.",
+        key="fase1_openweather_api_key",
     )
-    if gps_upload is not None:
-        try:
-            if gps_upload.name.lower().endswith(".json"):
-                gps_new = pd.read_json(gps_upload)
-            else:
-                gps_new = pd.read_csv(gps_upload)
-            st.markdown("**Vista previa del fichero GPS subido**")
-            st.dataframe(gps_new.head())
-            st.info(
-                "Para usar este fichero en el pipeline real, guárdalo como "
-                "`gps_events.csv` o `gps_events.json` en `data/sample/` y "
-                "ejecuta después los scripts de ingesta para copiarlo a HDFS."
+    ow_no_kafka = st.checkbox(
+        "Solo guardar fichero local (sin enviar a Kafka)",
+        value=False,
+        key="fase1_openweather_no_kafka",
+    )
+    if st.button("Actualizar OpenWeather ahora", key="fase1_refresh_weather_now"):
+        if not str(ow_api_key).strip():
+            st.error(
+                "Falta la API key de OpenWeather. "
+                "Introduce la clave en este campo o exporta `OPENWEATHER_API_KEY` en tu entorno."
             )
-        except Exception as exc:  # pragma: no cover - lectura interactiva
-            st.error(f"No se ha podido leer el fichero GPS subido: {exc}")
-
-    st.subheader("Subir nuevo fichero de rutas")
-    routes_upload = st.file_uploader(
-        "Sube un fichero de rutas (CSV)",
-        type=["csv"],
-        key="upload_routes",
-    )
-    if routes_upload is not None:
-        try:
-            routes_new = pd.read_csv(routes_upload)
-            st.markdown("**Vista previa del fichero de rutas subido**")
-            st.dataframe(routes_new.head())
-            # Guardamos una copia en sesión para que otras pestañas (como grafos)
-            # puedan usar las nuevas rutas sin tocar el CSV del repo.
-            st.session_state["routes_override_df"] = routes_new
-            st.info(
-                "El catálogo de rutas debe estar en CSV con columnas como "
-                "`route_id`, `from_warehouse_id`, `to_warehouse_id`, "
-                "`distance_km`, `avg_duration_min`. "
-                "Para usarlo en el pipeline, guárdalo como `routes.csv` en "
-                "`data/sample/` y vuelve a ejecutar los scripts de ingesta/Hive."
+            return
+        st.subheader("Salida en tiempo real (OpenWeather)")
+        weather_slot = st.empty()
+        with st.spinner("Lanzando scripts/ingest_openweather.py ..."):
+            weather_cmd = "python3 scripts/ingest_openweather.py"
+            if ow_no_kafka:
+                weather_cmd += " --no-kafka"
+            weather_out = run_command_streaming(
+                weather_cmd,
+                weather_slot,
+                extra_env={"OPENWEATHER_API_KEY": ow_api_key.strip()},
             )
-        except Exception as exc:  # pragma: no cover
-            st.error(f"No se ha podido leer el fichero de rutas subido: {exc}")
+        render_log_output(
+            "Log de ingest_openweather.py",
+            weather_out,
+            key="log_ingest_openweather_f1",
+            download_name="fase_i_openweather.log.txt",
+        )
+        m = re.search(r"Guardado:\s*(.+)", weather_out)
+        if m:
+            st.success(f"Nuevo fichero meteorológico generado: `{m.group(1).strip()}`")
+        if "OPENWEATHER_API_KEY no definida" in weather_out or "[exit_code=" in weather_out:
+            st.warning("La actualización de OpenWeather no terminó correctamente. Revisa el log.")
+        st.rerun()
 
-    st.subheader("Subir nuevo fichero de almacenes")
-    wh_upload = st.file_uploader(
-        "Sube un fichero de almacenes (CSV con `warehouse_id`, `name`, `city`, `country`, `lat`, `lon`, `capacity`)",
-        type=["csv"],
-        key="upload_warehouses",
+    fase_i_runs_df = _load_latest_airflow_run_df(
+        dag_ids=["sentinel360_fase_I_ingesta", "sentinel360_fase_i_ingesta"],
+        max_rows=10,
     )
-    if wh_upload is not None:
-        try:
-            wh_new = pd.read_csv(wh_upload)
-            st.markdown("**Vista previa del fichero de almacenes subido**")
-            st.dataframe(wh_new.head())
-            st.session_state["warehouses_override_df"] = wh_new
-            st.info(
-                "Para usar este fichero en el pipeline, guárdalo como `warehouses.csv` "
-                "en `data/sample/` y vuelve a ejecutar los scripts de ingesta/Hive. "
-                "Mientras tanto, la visualización de grafos y mapas usará esta versión en memoria."
-            )
-        except Exception as exc:  # pragma: no cover
-            st.error(f"No se ha podido leer el fichero de almacenes subido: {exc}")
+    if not fase_i_runs_df.empty:
+        st.markdown("**Últimas ejecuciones de Airflow detectadas para Fase I**")
+        st.dataframe(fase_i_runs_df, width="stretch", hide_index=True)
+
+    has_real_fase_i_data = (latest_f1_ts is not None) or (not weather_df.empty) or (not fase_i_runs_df.empty)
+    if has_real_fase_i_data:
+        st.info(
+            "Datos reales detectados para Fase I: se ocultan los bloques de datos de ejemplo para evitar confusión."
+        )
+    else:
+        st.subheader("Fallback: datos de ejemplo (data/sample)")
+        gps_df, wh_df, routes_df = load_sample_data()
+        if gps_df is not None:
+            st.markdown("**Muestra de eventos GPS (`gps_events.csv`)**")
+            st.dataframe(gps_df.head())
+        else:
+            st.info("No se ha encontrado `data/sample/gps_events.csv`.")
+
+        st.markdown(
+            """
+            ### Cargar nuevos ficheros de ejemplo (GPS / rutas)
+
+            Aquí puedes **probar otros ficheros de entrada** sin tocar el repositorio:
+
+            - **GPS (`gps_events`)**:
+              - Formatos soportados en el pipeline: **CSV o JSON**.
+              - Campos típicos (ver `data/sample/README.md`):
+                - `event_id`, `vehicle_id`, `ts` (timestamp ISO), `lat`, `lon`, `speed`, `warehouse_id`, `route_id`, `delay_minutes`.
+              - El pipeline de limpieza (`clean_and_normalize.py`) está preparado para leer
+                `gps_events*.csv` o `gps_events*.json` en la carpeta *raw* de HDFS.
+            - **Rutas (`routes.csv`)**:
+              - Formato actual soportado: **CSV**.
+              - Estructura esperada:
+                - `route_id`, `from_warehouse_id`, `to_warehouse_id`, `distance_km`, `avg_duration_min`.
+              - Se usa como maestro de rutas en Hive/GraphFrames (no en JSON en la versión actual).
+
+            Los ficheros que subas aquí se usan **solo para visualización en la demo**.  
+            Para que entren en el pipeline real, deberás copiarlos después a `data/sample/`
+            y/o subirlos a HDFS con los scripts de ingesta (`ingest_from_local.sh`, etc.).
+            """
+        )
+
+        st.subheader("Subir nuevo fichero de GPS")
+        gps_upload = st.file_uploader(
+            "Sube un fichero de eventos GPS (CSV o JSON)",
+            type=["csv", "json"],
+            key="upload_gps_events",
+        )
+        if gps_upload is not None:
+            try:
+                if gps_upload.name.lower().endswith(".json"):
+                    gps_new = pd.read_json(gps_upload)
+                else:
+                    gps_new = pd.read_csv(gps_upload)
+                st.markdown("**Vista previa del fichero GPS subido**")
+                st.dataframe(gps_new.head())
+                st.info(
+                    "Para usar este fichero en el pipeline real, guárdalo como "
+                    "`gps_events.csv` o `gps_events.json` en `data/sample/` y "
+                    "ejecuta después los scripts de ingesta para copiarlo a HDFS."
+                )
+            except Exception as exc:  # pragma: no cover - lectura interactiva
+                st.error(f"No se ha podido leer el fichero GPS subido: {exc}")
+
+        st.subheader("Subir nuevo fichero de rutas")
+        routes_upload = st.file_uploader(
+            "Sube un fichero de rutas (CSV)",
+            type=["csv"],
+            key="upload_routes",
+        )
+        if routes_upload is not None:
+            try:
+                routes_new = pd.read_csv(routes_upload)
+                st.markdown("**Vista previa del fichero de rutas subido**")
+                st.dataframe(routes_new.head())
+                # Guardamos una copia en sesión para que otras pestañas (como grafos)
+                # puedan usar las nuevas rutas sin tocar el CSV del repo.
+                st.session_state["routes_override_df"] = routes_new
+                st.info(
+                    "El catálogo de rutas debe estar en CSV con columnas como "
+                    "`route_id`, `from_warehouse_id`, `to_warehouse_id`, "
+                    "`distance_km`, `avg_duration_min`. "
+                    "Para usarlo en el pipeline, guárdalo como `routes.csv` en "
+                    "`data/sample/` y vuelve a ejecutar los scripts de ingesta/Hive."
+                )
+            except Exception as exc:  # pragma: no cover
+                st.error(f"No se ha podido leer el fichero de rutas subido: {exc}")
+
+        st.subheader("Subir nuevo fichero de almacenes")
+        wh_upload = st.file_uploader(
+            "Sube un fichero de almacenes (CSV con `warehouse_id`, `name`, `city`, `country`, `lat`, `lon`, `capacity`)",
+            type=["csv"],
+            key="upload_warehouses",
+        )
+        if wh_upload is not None:
+            try:
+                wh_new = pd.read_csv(wh_upload)
+                st.markdown("**Vista previa del fichero de almacenes subido**")
+                st.dataframe(wh_new.head())
+                st.session_state["warehouses_override_df"] = wh_new
+                st.info(
+                    "Para usar este fichero en el pipeline, guárdalo como `warehouses.csv` "
+                    "en `data/sample/` y vuelve a ejecutar los scripts de ingesta/Hive. "
+                    "Mientras tanto, la visualización de grafos y mapas usará esta versión en memoria."
+                )
+            except Exception as exc:  # pragma: no cover
+                st.error(f"No se ha podido leer el fichero de almacenes subido: {exc}")
 
     st.markdown("---")
     st.markdown("**Navegación rápida**")
@@ -728,6 +1289,50 @@ def page_fase_ii_limpieza_enriquecimiento():
         "./scripts/run_spark_submit.sh spark/cleaning/enrich_with_hive.py\n",
         language="bash",
     )
+    yarn_up = is_yarn_resource_manager_up()
+    force_local = st.checkbox(
+        "Forzar modo local de Spark (sin YARN)",
+        value=not yarn_up,
+        key="fase2_force_local",
+        help="Recomendado si YARN no está disponible o si los jobs quedan en reintentos.",
+    )
+    resource_profile = st.selectbox(
+        "Perfil de recursos Spark",
+        options=["Seguro (evitar reinicios)", "Normal"],
+        index=0,
+        key="fase2_resource_profile",
+        help="Usa 'Seguro' si el equipo se reinicia o se queda sin memoria durante Fase II.",
+    )
+    spark_env: dict[str, str] = {}
+    if resource_profile == "Seguro (evitar reinicios)":
+        spark_env = {
+            "SPARK_LOCAL_CORES": "2",
+            "SPARK_LOCAL_DRIVER_MEMORY": "1G",
+            "SPARK_EXECUTOR_CORES": "1",
+            "SPARK_EXECUTOR_MEMORY": "1G",
+            "SPARK_DRIVER_MEMORY": "1G",
+            "SPARK_SQL_SHUFFLE_PARTITIONS": "24",
+            "SPARK_DEFAULT_PARALLELISM": "6",
+            "NUM_EXECUTORS": "1",
+        }
+    else:
+        spark_env = {
+            "SPARK_LOCAL_CORES": "4",
+            "SPARK_LOCAL_DRIVER_MEMORY": "2G",
+            "SPARK_EXECUTOR_CORES": "2",
+            "SPARK_EXECUTOR_MEMORY": "2G",
+            "SPARK_DRIVER_MEMORY": "2G",
+            "SPARK_SQL_SHUFFLE_PARTITIONS": "48",
+            "SPARK_DEFAULT_PARALLELISM": "12",
+            "NUM_EXECUTORS": "2",
+        }
+    # En perfil seguro priorizamos estabilidad: forzamos ejecución local para evitar
+    # fallos YARN/AM en entornos con red/recursos inestables tras reinicios.
+    force_local_effective = force_local or (resource_profile == "Seguro (evitar reinicios)")
+    if resource_profile == "Seguro (evitar reinicios)" and not force_local:
+        st.info("Perfil seguro activo: Spark se ejecutará en modo local automáticamente.")
+    if not yarn_up:
+        st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
 
     st.markdown(
         """
@@ -750,13 +1355,91 @@ def page_fase_ii_limpieza_enriquecimiento():
     )
 
     if st.button("Lanzar limpieza + enriquecimiento (Spark)"):
+        st.subheader("Salida en tiempo real")
+        live_output = st.empty()
         with st.spinner("Lanzando jobs Spark de limpieza y enriquecimiento..."):
-            output = run_command(
-                "./scripts/run_spark_submit.sh spark/cleaning/clean_and_normalize.py && "
-                "./scripts/run_spark_submit.sh spark/cleaning/enrich_with_hive.py"
+            cmd_clean = spark_submit_cmd(
+                "spark/cleaning/clean_and_normalize.py",
+                force_local=force_local_effective,
             )
-        st.subheader("Salida de Spark submit")
-        st.text(output)
+            cmd_enrich = spark_submit_cmd(
+                "spark/cleaning/enrich_with_hive.py",
+                force_local=force_local_effective,
+            )
+            output = run_command_streaming(
+                f"{cmd_clean} && {cmd_enrich}",
+                live_output,
+                extra_env=spark_env,
+            )
+        st.subheader("Salida final de Spark submit")
+        render_log_output(
+            "Log de Spark submit (Fase II)",
+            output,
+            key="log_fase_ii_spark",
+            download_name="fase_ii_spark.log.txt",
+        )
+
+    st.subheader("Ejecuciones reales detectadas para Fase II")
+    fase_ii_runs_df = _load_latest_airflow_run_df(
+        dag_ids=["sentinel360_fase_II_preprocesamiento", "sentinel360_fase_ii_preprocesamiento"],
+        max_rows=12,
+    )
+    if not fase_ii_runs_df.empty:
+        st.dataframe(fase_ii_runs_df, width="stretch", hide_index=True)
+    else:
+        st.info("Aún no hay reportes de ejecuciones para Fase II en `reports/airflow`.")
+
+    st.subheader("Validar éxito (Airflow + HDFS)")
+    st.markdown(
+        """
+        **Qué comprueba esto**
+
+        - **Airflow**: contenido reciente de `reports/airflow/.../LATEST.md` (estado del DAG si el reporte se actualizó).
+        - **HDFS**: que existan salidas en `procesado/cleaned` y `procesado/enriched` (Parquet).
+        - **Logs locales**: últimos ficheros en `reports/logs/` (ej. ejecuciones Spark guardadas manualmente).
+
+        Un run en la tabla anterior con `state=running` y `end_date=None` puede ser histórico incompleto; la validación HDFS confirma si hay datos reales escritos.
+        """
+    )
+    st.code(
+        "# Ver reporte Airflow (Fase II)\n"
+        "sed -n '1,80p' reports/airflow/sentinel360_fase_II_preprocesamiento/LATEST.md 2>/dev/null || "
+        "sed -n '1,80p' reports/airflow/sentinel360_fase_ii_preprocesamiento/LATEST.md\n\n"
+        "# Ver artefactos HDFS\n"
+        "hdfs dfs -ls /user/hadoop/proyecto/procesado/cleaned\n"
+        "hdfs dfs -ls /user/hadoop/proyecto/procesado/enriched\n"
+        "hdfs dfs -du -h /user/hadoop/proyecto/procesado/cleaned\n"
+        "hdfs dfs -du -h /user/hadoop/proyecto/procesado/enriched\n\n"
+        "# Logs locales recientes\n"
+        "ls -lt reports/logs 2>/dev/null | head -8",
+        language="bash",
+    )
+    if st.button("Ejecutar validación ahora (Fase II)", key="fase2_validate_success"):
+        with st.spinner("Comprobando Airflow, HDFS y logs..."):
+            validate_cmd = (
+                'echo "=== Airflow LATEST.md (Fase II) ==="; '
+                "for d in reports/airflow/sentinel360_fase_II_preprocesamiento "
+                "reports/airflow/sentinel360_fase_ii_preprocesamiento; do "
+                'if [ -f "$d/LATEST.md" ]; then echo "--- $d/LATEST.md ---"; '
+                "sed -n '1,80p' \"$d/LATEST.md\"; fi; done; "
+                'echo ""; echo "=== HDFS cleaned ==="; '
+                "hdfs dfs -ls /user/hadoop/proyecto/procesado/cleaned 2>&1; "
+                'echo ""; echo "=== HDFS enriched ==="; '
+                "hdfs dfs -ls /user/hadoop/proyecto/procesado/enriched 2>&1; "
+                'echo ""; echo "=== HDFS du cleaned ==="; '
+                "hdfs dfs -du -h /user/hadoop/proyecto/procesado/cleaned 2>&1; "
+                'echo ""; echo "=== HDFS du enriched ==="; '
+                "hdfs dfs -du -h /user/hadoop/proyecto/procesado/enriched 2>&1; "
+                'echo ""; echo "=== reports/logs (últimos) ==="; '
+                "ls -lt reports/logs 2>/dev/null | head -8 || echo '(sin carpeta reports/logs)'"
+            )
+            validate_out = run_command(validate_cmd)
+        render_log_output(
+            "Resultado validación Fase II (éxito técnico)",
+            validate_out,
+            key="log_fase2_validate",
+            download_name="fase_ii_validacion_ok.log.txt",
+        )
 
     # Si el usuario ha subido una versión de almacenes o rutas, la usamos aquí
     wh_df_override = st.session_state.get("warehouses_override_df")
@@ -768,13 +1451,13 @@ def page_fase_ii_limpieza_enriquecimiento():
     if routes_df_override is not None:
         routes_df = routes_df_override
     if wh_df is not None:
-        st.subheader("Almacenes (`warehouses.csv`)")
+        st.subheader("Maestro de almacenes activo")
         st.dataframe(wh_df)
         if {"lat", "lon"}.issubset(wh_df.columns):
             st.map(wh_df.rename(columns={"lat": "latitude", "lon": "longitude"}))
 
     if routes_df is not None:
-        st.subheader("Rutas (`routes.csv`)")
+        st.subheader("Maestro de rutas activo")
         st.dataframe(routes_df)
 
     st.markdown("---")
@@ -910,7 +1593,7 @@ def page_fase_ii_grafos():
             except TypeError:
                 map_container = st.container()
             with map_container:
-                st_folium(m_espana, use_container_width=True, height=500, key="mapa_espana_grafos")
+                st_folium(m_espana, width=900, height=500, key="mapa_espana_grafos")
         else:
             st.info("No se han podido dibujar rutas en el mapa (faltan coordenadas en algunos almacenes de las rutas).")
     else:
@@ -923,20 +1606,52 @@ def page_fase_ii_grafos():
         "python scripts/ver_grafos_resultados.py --viz\n",
         language="bash",
     )
-
-    if st.button("Lanzar análisis de grafos"):
-        with st.spinner("Lanzando Spark (GraphFrames) y generación de grafo..."):
-            output = run_command(
-                "./scripts/run_spark_submit.sh spark/graph/transport_graph.py && "
-                f"{sys.executable} scripts/ver_grafos_resultados.py --viz"
-            )
-        st.subheader("Salida de comandos de grafos")
-        st.text(output)
+    yarn_up = is_yarn_resource_manager_up()
+    force_local = st.checkbox(
+        "Forzar modo local de Spark (grafos)",
+        value=not yarn_up,
+        key="fase2_graph_force_local",
+    )
+    if not yarn_up:
+        st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
 
     grafo_png = PROJECT_ROOT / "grafo.png"
+    if st.button("Lanzar análisis de grafos"):
+        st.subheader("Salida en tiempo real (grafos)")
+        live_output = st.empty()
+        prev_mtime = grafo_png.stat().st_mtime if grafo_png.exists() else None
+        with st.spinner("Lanzando Spark (GraphFrames) y generación de grafo..."):
+            cmd_graph = spark_submit_cmd(
+                "spark/graph/transport_graph.py",
+                force_local=force_local,
+            )
+            output = run_command_streaming(
+                f"{cmd_graph} && "
+                f"{sys.executable} scripts/ver_grafos_resultados.py --viz",
+                live_output,
+            )
+        st.subheader("Salida final de comandos de grafos")
+        render_log_output(
+            "Log de grafos",
+            output,
+            key="log_grafos",
+            download_name="fase_ii_grafos.log.txt",
+        )
+
+        new_mtime = grafo_png.stat().st_mtime if grafo_png.exists() else None
+        if "[exit_code=" in output:
+            st.error("La ejecución de grafos terminó con error. Revisa la salida final.")
+        elif new_mtime is None:
+            st.warning("El comando terminó, pero no se encontró `grafo.png`.")
+        elif prev_mtime is None or (new_mtime > prev_mtime):
+            st.success("Grafo regenerado correctamente.")
+        else:
+            st.info("El proceso terminó bien, pero `grafo.png` no cambió respecto a la versión anterior.")
+
     if grafo_png.exists():
         st.subheader("Imagen del grafo (`grafo.png`)")
-        st.image(str(grafo_png))
+        # Leemos bytes para evitar caché por ruta y ver la versión más reciente.
+        st.image(grafo_png.read_bytes())
     else:
         st.info("Aún no se ha generado `grafo.png`. Ejecuta `ver_grafos_resultados.py --viz` primero.")
 
@@ -1573,22 +2288,87 @@ def page_fase_iii_streaming_anomalias():
         "./scripts/run_spark_submit.sh spark/ml/anomaly_detection.py\n",
         language="bash",
     )
+    yarn_up = is_yarn_resource_manager_up()
+    force_local = st.checkbox(
+        "Forzar modo local de Spark (streaming/anomalías)",
+        value=not yarn_up,
+        key="fase3_force_local",
+    )
+    if not yarn_up:
+        st.warning("YARN ResourceManager no responde en `hadoop:8032`. Se recomienda `--local`.")
 
     if st.button("Lanzar streaming de retrasos"):
         with st.spinner("Lanzando Spark Streaming (delays_windowed.py)..."):
             output = run_command(
-                f"./scripts/run_spark_submit.sh spark/streaming/delays_windowed.py {modo_stream}"
+                spark_submit_cmd(
+                    "spark/streaming/delays_windowed.py",
+                    modo_stream,
+                    force_local=force_local,
+                )
             )
         st.subheader("Salida de delays_windowed.py")
-        st.text(output)
+        render_log_output(
+            "Log de delays_windowed.py",
+            output,
+            key="log_fase_iii_streaming",
+            download_name="fase_iii_streaming.log.txt",
+        )
 
     if st.button("Lanzar detección de anomalías (batch)"):
         with st.spinner("Lanzando Spark ML (anomaly_detection.py)..."):
             output = run_command(
-                "./scripts/run_spark_submit.sh spark/ml/anomaly_detection.py"
+                spark_submit_cmd(
+                    "spark/ml/anomaly_detection.py",
+                    force_local=force_local,
+                )
             )
         st.subheader("Salida de anomaly_detection.py")
-        st.text(output)
+        render_log_output(
+            "Log de anomaly_detection.py",
+            output,
+            key="log_fase_iii_anomalias",
+            download_name="fase_iii_anomalias.log.txt",
+        )
+
+    st.subheader("Cuadros reconstruidos con datos obtenidos (MongoDB)")
+    try:
+        client = get_mongo_client()
+        client.admin.command("ping")
+        db = client[MONGO_DB]
+        agg_docs = list(
+            db[MONGO_AGGREGATED_COLLECTION]
+            .find({}, {"_id": 0})
+            .sort("window_start", -1)
+            .limit(200)
+        )
+        anom_docs = list(
+            db[MONGO_ANOMALIES_COLLECTION]
+            .find({}, {"_id": 0})
+            .sort("window_start", -1)
+            .limit(200)
+        )
+        agg_df = pd.DataFrame(agg_docs)
+        anom_df = pd.DataFrame(anom_docs)
+        if not agg_df.empty:
+            if "window_start" in agg_df.columns:
+                agg_df["window_start"] = pd.to_datetime(agg_df["window_start"], errors="coerce", utc=True)
+            st.markdown("**Agregados de retrasos (últimas ventanas)**")
+            st.dataframe(agg_df.head(50), width="stretch")
+        else:
+            st.info("Sin agregados en MongoDB todavía.")
+
+        if not anom_df.empty:
+            if "window_start" in anom_df.columns:
+                anom_df["window_start"] = pd.to_datetime(anom_df["window_start"], errors="coerce", utc=True)
+            st.markdown("**Anomalías detectadas (últimas ventanas)**")
+            st.dataframe(anom_df.head(50), width="stretch")
+        else:
+            st.info("Sin anomalías en MongoDB todavía.")
+    except Exception as exc:  # pragma: no cover - UI interactiva
+        st.warning(
+            "No se ha podido reconstruir cuadros desde MongoDB en esta fase. "
+            f"Detalle: {exc}"
+        )
 
     st.markdown("---")
     st.markdown("**Navegación rápida**")
@@ -1663,9 +2443,9 @@ def page_entorno_visual():
         **DAGs de Airflow** que orquestan el pipeline de forma desasistida:
 
         - `sentinel360_infra_start` / `sentinel360_infra_stop`: levantan/paran el clúster (HDFS, Kafka, Mongo, MariaDB, NiFi, etc.).
-        - `sentinel360_fase_i_ingesta`: prepara NiFi/Kafka, genera GPS sintético + OpenWeather y deja datos listos en raw.
-        - `sentinel360_fase_ii_preprocesamiento`: ejecuta limpieza, enriquecimiento y grafo de transporte (Spark + Hive).
-        - `sentinel360_fase_iii_batch` / `sentinel360_fase_iii_streaming`: calculan agregados de retrasos, anomalías y KPIs.
+        - `sentinel360_fase_I_ingesta`: prepara NiFi/Kafka, genera GPS sintético + OpenWeather y deja datos listos en raw.
+        - `sentinel360_fase_II_preprocesamiento`: ejecuta limpieza, enriquecimiento y grafo de transporte (Spark + Hive).
+        - `sentinel360_fase_III_batch` / `sentinel360_fase_III_streaming`: calculan agregados de retrasos, anomalías y KPIs.
         - `sentinel360_dashboards_levantar` / `sentinel360_dashboards_exportar`: levantan Superset/Grafana y exportan datos de Hive/Mongo a MariaDB para los cuadros de mando.
 
         De este modo, el **entorno visual** (Superset/Grafana) puede alimentarse automáticamente,
@@ -1718,10 +2498,10 @@ def page_entorno_visual():
         st.info("Aún no existe `reports/airflow/`. Se creará automáticamente tras ejecutar un DAG.")
 
     if airflow_md.exists():
-        st.markdown("**Ejemplo de DAG batch `sentinel360_fase_iii_batch` (tareas principales):**")
+        st.markdown("**Ejemplo de DAG batch `sentinel360_fase_III_batch` (tareas principales):**")
         st.code(
             """with DAG(
-    dag_id="sentinel360_fase_iii_batch",
+    dag_id="sentinel360_fase_III_batch",
     default_args=DEFAULT_ARGS,
     schedule_interval=None,
     catchup=False,
@@ -1747,9 +2527,9 @@ def page_entorno_visual():
         st.markdown("**Esquema de dependencias (simplificado):**")
         st.code(
             """sentinel360_infra_start
-    → sentinel360_fase_i_ingesta
-        → sentinel360_fase_ii_preprocesamiento
-            → sentinel360_fase_iii_batch / sentinel360_fase_iii_streaming
+    → sentinel360_fase_I_ingesta
+        → sentinel360_fase_II_preprocesamiento
+            → sentinel360_fase_III_batch / sentinel360_fase_III_streaming
                 → sentinel360_dashboards_exportar
                     → dashboards en Superset / Grafana
 """,

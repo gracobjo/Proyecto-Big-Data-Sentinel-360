@@ -30,12 +30,12 @@ def spark(script: str) -> str:
     return f"NUM_EXECUTORS={NUM_EXECUTORS_VALUE} cd {PROJECT_DIR} && SPARK_MASTER=\"{SPARK_MASTER_VALUE}\" && ./scripts/run_spark_submit.sh{local_flag}{script} "
 
 with DAG(
-    dag_id="sentinel360_fase_iii_batch",
+    dag_id="sentinel360_fase_III_batch",
     default_args={"owner": "sentinel360", "retries": 1, "retry_delay": timedelta(minutes=5), "execution_timeout": timedelta(minutes=60)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
-    tags=["sentinel360", "fase-iii", "kdd-mineria"],
+    tags=["sentinel360", "fase-III", "kdd-mineria"],
     description="Fase III KDD (batch): agregados, anomalías y KPIs a MariaDB.",
 ) as dag:
     load_agg = BashOperator(

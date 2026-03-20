@@ -43,27 +43,27 @@ def main():
         return
 
     dir_path = os.path.join(PROJECT_ROOT, args.dir)
-    if not os.path.isdir(dir_path):
+    if os.path.isdir(dir_path):
+        parquets = [f for f in os.listdir(dir_path) if f.endswith(".parquet")]
+        if parquets:
+            print("=== Datos en Parquet (tablas) ===\n")
+            for f in sorted(parquets)[:5]:  # máximo 5 archivos
+                path = os.path.join(dir_path, f)
+                try:
+                    df = pd.read_parquet(path)
+                    print(f"--- {f} ---")
+                    print(df.to_string())
+                    print()
+                except Exception as e:
+                    print(f"{f}: {e}\n")
+        elif not args.viz:
+            print(f"No hay ficheros .parquet en {dir_path}")
+            return
+    elif not args.viz:
         print(f"No existe la carpeta {dir_path}. Copia los Parquet desde HDFS:")
         print("  hdfs dfs -get /user/hadoop/proyecto/procesado/graph/shortest_paths/* resultados/")
         print("  hdfs dfs -get /user/hadoop/proyecto/procesado/graph/connected_components/* resultados/")
         return
-
-    parquets = [f for f in os.listdir(dir_path) if f.endswith(".parquet")]
-    if not parquets:
-        print(f"No hay ficheros .parquet en {dir_path}")
-        return
-
-    print("=== Datos en Parquet (tablas) ===\n")
-    for f in sorted(parquets)[:5]:  # máximo 5 archivos
-        path = os.path.join(dir_path, f)
-        try:
-            df = pd.read_parquet(path)
-            print(f"--- {f} ---")
-            print(df.to_string())
-            print()
-        except Exception as e:
-            print(f"{f}: {e}\n")
 
     if args.viz:
         try:

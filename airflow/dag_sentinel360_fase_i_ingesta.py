@@ -22,12 +22,12 @@ except Exception:
 from sentinel360_reporting import Sentinel360ReportConfig, write_dag_run_report  # type: ignore
 
 with DAG(
-    dag_id="sentinel360_fase_i_ingesta",
+    dag_id="sentinel360_fase_I_ingesta",
     default_args={"owner": "sentinel360", "retries": 1, "retry_delay": timedelta(minutes=2), "execution_timeout": timedelta(minutes=15)},
     schedule=None,
     start_date=datetime(2026, 3, 1),
     catchup=False,
-    tags=["sentinel360", "fase-i", "kdd-ingesta"],
+    tags=["sentinel360", "fase-I", "kdd-ingesta"],
     description="Fase I KDD: Kafka topics + ingesta GPS sintética + OpenWeather.",
 ) as dag:
     kafka = BashOperator(
@@ -40,7 +40,16 @@ with DAG(
     )
     ingest_weather = BashOperator(
         task_id="ingest_openweather",
-        bash_command=f"cd {PROJECT_DIR} && python3 scripts/ingest_openweather.py ",
+        # Si no hay API key, no tumbamos todo el DAG de Fase I:
+        # dejamos evidencia y continuamos con la ingesta GPS.
+        bash_command=(
+            f"cd {PROJECT_DIR} && "
+            "if [ -z \"$OPENWEATHER_API_KEY\" ]; then "
+            "echo '[WARN] openweather_api_key no definida en Airflow Variables; se omite ingest_openweather.'; "
+            "exit 0; "
+            "fi; "
+            "python3 scripts/ingest_openweather.py "
+        ),
         env={"OPENWEATHER_API_KEY": OPENWEATHER_API_KEY},
     )
     kafka >> ingest_gps

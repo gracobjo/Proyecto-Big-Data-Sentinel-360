@@ -180,10 +180,10 @@ Ocho DAGs de Airflow gestionan el ciclo de vida completo:
 |-----|-------------|
 | `sentinel360_infra_start` | Arranque de servicios del clúster |
 | `sentinel360_infra_stop` | Parada ordenada de servicios |
-| `sentinel360_fase_i_ingesta` | Kafka topics → GPS sintético → OpenWeather |
-| `sentinel360_fase_ii_preprocesamiento` | Hive setup → limpieza → enriquecimiento → grafo |
-| `sentinel360_fase_iii_batch` | Agregados → anomalías → KPIs a MariaDB |
-| `sentinel360_fase_iii_streaming` | Inicio controlado del job de streaming |
+| `sentinel360_fase_I_ingesta` | Kafka topics → GPS sintético → OpenWeather |
+| `sentinel360_fase_II_preprocesamiento` | Hive setup → limpieza → enriquecimiento → grafo |
+| `sentinel360_fase_III_batch` | Agregados → anomalías → KPIs a MariaDB |
+| `sentinel360_fase_III_streaming` | Inicio controlado del job de streaming |
 | `sentinel360_dashboards_levantar` | Levanta Grafana y Superset |
 | `sentinel360_dashboards_exportar` | Exporta datos a MariaDB para dashboards |
 

@@ -53,24 +53,50 @@ if [ -z "$PYSPARK_PYTHON" ] || [ -z "$PYSPARK_DRIVER_PYTHON" ]; then
 fi
 
 # Jobs con enableHiveSupport() (p. ej. enrich_with_hive.py) necesitan el driver JDBC de MySQL/MariaDB
-# en el classpath; si no, fallan con "com.mysql.cj.jdbc.Driver was not found in the CLASSPATH".
+# en el classpath del driver de Spark. Solo --jars no siempre basta para Hive Metastore.
 HIVE_HOME="${HIVE_HOME:-/usr/local/hive}"
 EXTRA_JARS=""
-for jar in "$HIVE_HOME/lib/mysql-connector-j-"*.jar "$HIVE_HOME/lib/mysql-connector-java-"*.jar "$HIVE_HOME/lib/mariadb-java-client-"*.jar; do
+for jar in \
+  "$HIVE_HOME/lib/mysql-connector-j-"*.jar \
+  "$HIVE_HOME/lib/mysql-connector-java-"*.jar \
+  "$HIVE_HOME/lib/mariadb-java-client-"*.jar \
+  "/usr/share/java/mysql-connector-j-"*.jar \
+  "/usr/share/java/mysql-connector-java-"*.jar \
+  "/usr/share/java/mariadb-java-client-"*.jar; do
   [ -f "$jar" ] && EXTRA_JARS="$jar" && break
 done
-[ -n "$EXTRA_JARS" ] && SPARK_JARS="--jars $EXTRA_JARS" || SPARK_JARS=""
+
+if [ -n "$EXTRA_JARS" ]; then
+  SPARK_JARS_ARGS=(--jars "$EXTRA_JARS")
+  SPARK_CLASSPATH_ARGS=(
+    --driver-class-path "$EXTRA_JARS"
+    --conf "spark.driver.extraClassPath=$EXTRA_JARS"
+    --conf "spark.executor.extraClassPath=$EXTRA_JARS"
+  )
+  echo "[run_spark_submit] JDBC driver detectado: $EXTRA_JARS"
+else
+  SPARK_JARS_ARGS=()
+  SPARK_CLASSPATH_ARGS=()
+  echo "[run_spark_submit][WARN] No se encontró driver JDBC MySQL/MariaDB en Hive lib ni /usr/share/java."
+fi
 
 # Modo local: sin YARN, todo en la máquina actual (evita fallos por disco lleno en nodos).
 # Exportar SPARK_MASTER para que config.py y los scripts Python usen local en lugar de yarn.
 if [ -n "$USE_LOCAL" ]; then
   echo "[run_spark_submit] Modo local (--local): sin YARN, ejecución en esta máquina."
-  export SPARK_MASTER="local[*]"
+  LOCAL_CORES="${SPARK_LOCAL_CORES:-2}"
+  LOCAL_DRIVER_MEMORY="${SPARK_LOCAL_DRIVER_MEMORY:-1G}"
+  SHUFFLE_PARTS="${SPARK_SQL_SHUFFLE_PARTITIONS:-32}"
+  DEFAULT_PARALLELISM="${SPARK_DEFAULT_PARALLELISM:-8}"
+  export SPARK_MASTER="local[$LOCAL_CORES]"
   "${SPARK_HOME}/bin/spark-submit" \
-    --master "local[*]" \
-    $SPARK_JARS \
+    --master "local[$LOCAL_CORES]" \
+    "${SPARK_JARS_ARGS[@]}" \
+    "${SPARK_CLASSPATH_ARGS[@]}" \
     --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,graphframes:graphframes:0.8.3-spark3.5-s_2.12 \
-    --driver-memory 2G \
+    --conf "spark.sql.shuffle.partitions=$SHUFFLE_PARTS" \
+    --conf "spark.default.parallelism=$DEFAULT_PARALLELISM" \
+    --driver-memory "$LOCAL_DRIVER_MEMORY" \
     --py-files "${PROJECT_ROOT}/config.py" \
     "$SPARK_SCRIPT" \
     "${EXTRA_ARGS[@]}"
@@ -78,17 +104,25 @@ if [ -n "$USE_LOCAL" ]; then
 fi
 
 # Modo YARN. Si los workers fallan (p. ej. "No space left"), usar NUM_EXECUTORS=1 o --local.
-NUM_EXECUTORS="${NUM_EXECUTORS:-2}"
+NUM_EXECUTORS="${NUM_EXECUTORS:-1}"
+EXECUTOR_CORES="${SPARK_EXECUTOR_CORES:-1}"
+EXECUTOR_MEMORY="${SPARK_EXECUTOR_MEMORY:-1G}"
+DRIVER_MEMORY="${SPARK_DRIVER_MEMORY:-1G}"
+SHUFFLE_PARTS="${SPARK_SQL_SHUFFLE_PARTITIONS:-32}"
+DEFAULT_PARALLELISM="${SPARK_DEFAULT_PARALLELISM:-8}"
 
 "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
-  $SPARK_JARS \
+  "${SPARK_JARS_ARGS[@]}" \
+  "${SPARK_CLASSPATH_ARGS[@]}" \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,graphframes:graphframes:0.8.3-spark3.5-s_2.12 \
+  --conf "spark.sql.shuffle.partitions=$SHUFFLE_PARTS" \
+  --conf "spark.default.parallelism=$DEFAULT_PARALLELISM" \
   --num-executors "$NUM_EXECUTORS" \
-  --executor-cores 2 \
-  --executor-memory 2G \
-  --driver-memory 2G \
+  --executor-cores "$EXECUTOR_CORES" \
+  --executor-memory "$EXECUTOR_MEMORY" \
+  --driver-memory "$DRIVER_MEMORY" \
   --py-files "${PROJECT_ROOT}/config.py" \
   "$SPARK_SCRIPT" \
   "${EXTRA_ARGS[@]}"

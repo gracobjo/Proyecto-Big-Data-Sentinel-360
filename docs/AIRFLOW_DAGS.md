@@ -47,10 +47,10 @@ Los DAGs están organizados por **fase del ciclo KDD** y por **infraestructura/d
 | **sentinel360_infra_mariadb_start** | Infra | Arrancar solo MariaDB/MySQL (XAMPP o systemd) y esperar puerto 3306. Ejecutar antes de *infra_start* si Hive Metastore falla por 3306. |
 | **sentinel360_infra_start** | Infra | Arrancar servicios: HDFS, YARN, Kafka, MongoDB, MariaDB, Hive, NiFi. |
 | **sentinel360_infra_stop** | Infra | Parar todos los servicios. |
-| **sentinel360_fase_i_ingesta** | Fase I – Ingesta | Crear temas Kafka → ingesta GPS sintética + OpenWeather (paralelo). Requiere variable `openweather_api_key`. |
-| **sentinel360_fase_ii_preprocesamiento** | Fase II – Preprocesamiento | Hive setup → limpieza → enriquecimiento → grafo de transporte. |
-| **sentinel360_fase_iii_batch** | Fase III – Minería (batch) | Cargar agregados Hive/MongoDB → detección de anomalías → KPIs + anomalías a MariaDB. |
-| **sentinel360_fase_iii_streaming** | Fase III – Streaming | Job de retrasos por ventana (`delays_windowed.py`). Variable opcional `sentinel360_streaming_mode` = `file` \| `kafka`. |
+| **sentinel360_fase_I_ingesta** | Fase I – Ingesta | Crear temas Kafka → ingesta GPS sintética + OpenWeather (paralelo). Requiere variable `openweather_api_key`. |
+| **sentinel360_fase_II_preprocesamiento** | Fase II – Preprocesamiento | Hive setup → limpieza → enriquecimiento → grafo de transporte. |
+| **sentinel360_fase_III_batch** | Fase III – Minería (batch) | Cargar agregados Hive/MongoDB → detección de anomalías → KPIs + anomalías a MariaDB. |
+| **sentinel360_fase_III_streaming** | Fase III – Streaming | Job de retrasos por ventana (`delays_windowed.py`). Variable opcional `sentinel360_streaming_mode` = `file` \| `kafka`. |
 | **sentinel360_dashboards_levantar** | Dashboards | Levantar MariaDB, Superset y Grafana con Docker (puertos 3307, 8089, 3000). |
 | **sentinel360_dashboards_exportar** | Dashboards | Exportar a Superset/Grafana: **MongoDB** (aggregated_delays + anomalies → MariaDB) y **Hive** (aggregated_delays, reporte_diario_retrasos → MariaDB). |
 
@@ -91,7 +91,7 @@ Puedes cambiarla de dos formas:
 1. **Variable de Airflow** (recomendado): en la UI, Admin → Variables → crear `sentinel360_project_dir` con el valor `/ruta/real/al/proyecto`.
 2. **Editar el DAG**: en cada archivo `.py`, modificar la línea `PROJECT_DIR = ...` o el `default_var` dentro de `Variable.get(...)`.
 
-**Variable para OpenWeather:** el DAG **sentinel360_fase_i_ingesta** usa la tarea de OpenWeather; crea la variable **`openweather_api_key`** (sensitive) en Admin → Variables. **Opcional:** `sentinel360_streaming_mode` = `file` o `kafka` para el DAG de streaming. **Spark sin YARN:** por defecto los DAGs de Fase II y III usan Spark en modo local (`sentinel360_spark_use_local=true`); si YARN está en marcha y quieres usarlo, crea la variable `sentinel360_spark_use_local` = `false`.
+**Variable para OpenWeather:** el DAG **sentinel360_fase_I_ingesta** usa la tarea de OpenWeather; crea la variable **`openweather_api_key`** (sensitive) en Admin → Variables. **Opcional:** `sentinel360_streaming_mode` = `file` o `kafka` para el DAG de streaming. **Spark sin YARN:** por defecto los DAGs de Fase II y III usan Spark en modo local (`sentinel360_spark_use_local=true`); si YARN está en marcha y quieres usarlo, crea la variable `sentinel360_spark_use_local` = `false`.
 
 ---
 
@@ -117,10 +117,10 @@ Puedes cambiarla de dos formas:
    - Desde CLI (ejemplos):
      - `airflow dags trigger sentinel360_infra_start`
      - `airflow dags trigger sentinel360_infra_stop`
-     - `airflow dags trigger sentinel360_fase_i_ingesta`   # requiere variable openweather_api_key
-     - `airflow dags trigger sentinel360_fase_ii_preprocesamiento`
-     - `airflow dags trigger sentinel360_fase_iii_batch`
-     - `airflow dags trigger sentinel360_fase_iii_streaming`
+     - `airflow dags trigger sentinel360_fase_I_ingesta`   # requiere variable openweather_api_key
+     - `airflow dags trigger sentinel360_fase_II_preprocesamiento`
+     - `airflow dags trigger sentinel360_fase_III_batch`
+     - `airflow dags trigger sentinel360_fase_III_streaming`
      - `airflow dags trigger sentinel360_dashboards_levantar`   # requiere Docker
      - `airflow dags trigger sentinel360_dashboards_exportar`   # MongoDB + Hive → MariaDB
 
@@ -145,9 +145,9 @@ Guía completa: `docs/GUIA_ARRANQUE_AIRFLOW.md`.
 
 1. **sentinel360_infra_mariadb_start** (opcional) — Si MariaDB no está en marcha y quieres que Hive Metastore arranque en el paso 2, ejecuta primero este DAG.
 2. **sentinel360_infra_start** — Levantar servicios del clúster.
-3. **sentinel360_fase_i_ingesta** — Crear temas Kafka y cargar datos (GPS sintético + OpenWeather).
-4. **sentinel360_fase_ii_preprocesamiento** — Hive, limpieza, enriquecimiento y grafo.
-5. **sentinel360_fase_iii_batch** — Agregados, anomalías y KPIs a MariaDB; opcionalmente **sentinel360_fase_iii_streaming**.
+3. **sentinel360_fase_I_ingesta** — Crear temas Kafka y cargar datos (GPS sintético + OpenWeather).
+4. **sentinel360_fase_II_preprocesamiento** — Hive, limpieza, enriquecimiento y grafo.
+5. **sentinel360_fase_III_batch** — Agregados, anomalías y KPIs a MariaDB; opcionalmente **sentinel360_fase_III_streaming**.
 6. **sentinel360_dashboards_levantar** (opcional) — MariaDB + Superset + Grafana con Docker.
 7. **sentinel360_dashboards_exportar** — Exportar datos de MongoDB y Hive a MariaDB para Superset y Grafana (ejecutar con MariaDB y dashboards en marcha).
 

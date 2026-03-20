@@ -430,7 +430,7 @@ stateDiagram-v2
 ```mermaid
 flowchart TD
     START([▶ Inicio]) --> INFRA[DAG: infra_start\nArrancar HDFS · YARN · Kafka · NiFi · Hive]
-    INFRA --> FASE1[DAG: fase_i_ingesta]
+    INFRA --> FASE1[DAG: fase_I_ingesta]
 
     subgraph FASE1["DAG Fase I – Ingesta"]
         F1A[Crear topics Kafka] --> F1B[Ingestar GPS sintético]
@@ -438,7 +438,7 @@ flowchart TD
         F1C --> F1R[reporte_ejecucion]
     end
 
-    FASE1 --> FASE2[DAG: fase_ii_preprocesamiento]
+    FASE1 --> FASE2[DAG: fase_II_preprocesamiento]
 
     subgraph FASE2["DAG Fase II – Preprocesamiento"]
         F2A[Setup tablas Hive] --> F2B[clean_and_normalize]
@@ -447,8 +447,8 @@ flowchart TD
         F2D --> F2R[reporte_ejecucion]
     end
 
-    FASE2 --> FASE3B[DAG: fase_iii_batch]
-    FASE2 --> FASE3S[DAG: fase_iii_streaming]
+    FASE2 --> FASE3B[DAG: fase_III_batch]
+    FASE2 --> FASE3S[DAG: fase_III_streaming]
 
     subgraph FASE3B["DAG Fase III – Batch"]
         F3A[write_to_hive_and_mongo] --> F3B[anomaly_detection K-Means]

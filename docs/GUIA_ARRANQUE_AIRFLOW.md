@@ -126,9 +126,9 @@ sudo /opt/lampp/lampp startmysql
 
 ```bash
 airflow dags trigger sentinel360_infra_start
-airflow dags trigger sentinel360_fase_i_ingesta
-airflow dags trigger sentinel360_fase_ii_preprocesamiento
-airflow dags trigger sentinel360_fase_iii_batch
+airflow dags trigger sentinel360_fase_I_ingesta
+airflow dags trigger sentinel360_fase_II_preprocesamiento
+airflow dags trigger sentinel360_fase_III_batch
 airflow dags trigger sentinel360_dashboards_exportar
 ```
 
@@ -137,9 +137,9 @@ airflow dags trigger sentinel360_dashboards_exportar
 ### 8) Orden recomendado de ejecución (demo)
 
 1. `sentinel360_infra_start`
-2. `sentinel360_fase_i_ingesta`
-3. `sentinel360_fase_ii_preprocesamiento`
-4. `sentinel360_fase_iii_batch` (y opcional `sentinel360_fase_iii_streaming`)
+2. `sentinel360_fase_I_ingesta`
+3. `sentinel360_fase_II_preprocesamiento`
+4. `sentinel360_fase_III_batch` (y opcional `sentinel360_fase_III_streaming`)
 5. (opcional) `sentinel360_dashboards_levantar` (Docker)
 6. `sentinel360_dashboards_exportar`
 
